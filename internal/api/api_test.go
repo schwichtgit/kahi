@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/kahidev/kahi/internal/events"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // --- Mock implementations ---
@@ -97,11 +98,15 @@ func (m *mockGroupManager) StopGroup(name string) error    { return m.StartGroup
 func (m *mockGroupManager) RestartGroup(name string) error { return m.StartGroup(name) }
 
 type mockConfigManager struct {
-	cfg any
+	cfg      any
+	reloadFn func() ([]string, []string, []string, error)
 }
 
 func (m *mockConfigManager) GetConfig() any { return m.cfg }
 func (m *mockConfigManager) Reload() ([]string, []string, []string, error) {
+	if m.reloadFn != nil {
+		return m.reloadFn()
+	}
 	return []string{"new"}, []string{"changed"}, []string{"removed"}, nil
 }
 
@@ -836,5 +841,347 @@ func TestLogStreamSSENotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+// --- handleWriteStdin tests ---
+
+func TestWriteStdin(t *testing.T) {
+	srv, _, _ := testServer()
+	body := strings.NewReader(`{"data":"hello"}`)
+	req := httptest.NewRequest("POST", "/api/v1/processes/web/stdin", body)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["status"] != "written" {
+		t.Fatalf("expected written, got %s", resp["status"])
+	}
+}
+
+func TestWriteStdinBadBody(t *testing.T) {
+	srv, _, _ := testServer()
+	body := strings.NewReader(`not json`)
+	req := httptest.NewRequest("POST", "/api/v1/processes/web/stdin", body)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestWriteStdinNotFound(t *testing.T) {
+	srv, _, _ := testServer()
+	body := strings.NewReader(`{"data":"hello"}`)
+	req := httptest.NewRequest("POST", "/api/v1/processes/nonexistent/stdin", body)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+// --- handleStopGroup / handleRestartGroup tests ---
+
+func TestStopGroup(t *testing.T) {
+	srv, _, _ := testServer()
+	req := httptest.NewRequest("POST", "/api/v1/groups/web/stop", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["status"] != "stopped" {
+		t.Fatalf("expected stopped, got %s", resp["status"])
+	}
+}
+
+func TestRestartGroup(t *testing.T) {
+	srv, _, _ := testServer()
+	req := httptest.NewRequest("POST", "/api/v1/groups/web/restart", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["status"] != "restarted" {
+		t.Fatalf("expected restarted, got %s", resp["status"])
+	}
+}
+
+func TestStopGroupNotFound(t *testing.T) {
+	srv, _, _ := testServer()
+	req := httptest.NewRequest("POST", "/api/v1/groups/nonexistent/stop", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestRestartGroupNotFound(t *testing.T) {
+	srv, _, _ := testServer()
+	req := httptest.NewRequest("POST", "/api/v1/groups/nonexistent/restart", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+// --- handleRestartProcess not found ---
+
+func TestRestartProcessNotFound(t *testing.T) {
+	srv, _, _ := testServer()
+	req := httptest.NewRequest("POST", "/api/v1/processes/nonexistent/restart", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+// --- checkPassword with bcrypt ---
+
+func TestCheckPasswordBcrypt(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hashStr := string(hash)
+
+	if !checkPassword("correct", hashStr) {
+		t.Fatal("expected checkPassword to return true for correct password")
+	}
+	if checkPassword("wrong", hashStr) {
+		t.Fatal("expected checkPassword to return false for wrong password")
+	}
+}
+
+func TestCheckPasswordEmpty(t *testing.T) {
+	if !checkPassword("", "") {
+		t.Fatal("expected true for empty password and empty hash")
+	}
+	if checkPassword("notempty", "") {
+		t.Fatal("expected false for non-empty password with empty hash")
+	}
+}
+
+// --- Start and StartWithContext ---
+
+func TestStart(t *testing.T) {
+	srv, _, _ := testServer()
+	if err := srv.Start(); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestStartWithContext(t *testing.T) {
+	srv, _, _ := testServer()
+	ctx := context.Background()
+	if err := srv.StartWithContext(ctx); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+// --- errorCode UNAUTHORIZED ---
+
+func TestErrorCodeUnauthorized(t *testing.T) {
+	code := errorCode(http.StatusUnauthorized)
+	if code != "UNAUTHORIZED" {
+		t.Fatalf("expected UNAUTHORIZED, got %s", code)
+	}
+}
+
+func TestErrorCodeDefault(t *testing.T) {
+	code := errorCode(http.StatusInternalServerError)
+	if code != "SERVER_ERROR" {
+		t.Fatalf("expected SERVER_ERROR, got %s", code)
+	}
+}
+
+// --- removeStaleSocket ---
+
+func TestRemoveStaleSocketNonSocket(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "regular.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	err := removeStaleSocket(path)
+	if err == nil {
+		t.Fatal("expected error for non-socket file")
+	}
+	if !strings.Contains(err.Error(), "not a socket") {
+		t.Fatalf("expected 'not a socket' in error, got: %s", err.Error())
+	}
+}
+
+func TestRemoveStaleSocketNonexistent(t *testing.T) {
+	err := removeStaleSocket("/tmp/nonexistent-kahi-test-socket-path")
+	if err != nil {
+		t.Fatalf("expected nil for nonexistent path, got %v", err)
+	}
+}
+
+// --- handleReloadConfig error path ---
+
+func TestReloadConfigError(t *testing.T) {
+	pm := &mockProcessManager{
+		processes: []ProcessInfo{
+			{Name: "web", Group: "web", State: "RUNNING", PID: 1234},
+		},
+	}
+	gm := &mockGroupManager{groups: []string{"web"}}
+	cm := &mockConfigManager{
+		cfg: map[string]string{"test": "config"},
+		reloadFn: func() ([]string, []string, []string, error) {
+			return nil, nil, nil, fmt.Errorf("config parse error: invalid TOML")
+		},
+	}
+	di := &mockDaemonInfo{ready: true}
+	bus := events.NewBus(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	srv := NewServer(Config{}, pm, gm, cm, di, bus, logger)
+
+	req := httptest.NewRequest("POST", "/api/v1/config/reload", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["code"] != "SERVER_ERROR" {
+		t.Fatalf("expected SERVER_ERROR, got %s", body["code"])
+	}
+}
+
+// --- ReadLog with query parameters ---
+
+func TestReadLogWithParams(t *testing.T) {
+	srv, _, _ := testServer()
+	req := httptest.NewRequest("GET", "/api/v1/processes/web/log/stderr?offset=100&length=500", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestReadLogNotFound(t *testing.T) {
+	srv, _, _ := testServer()
+	req := httptest.NewRequest("GET", "/api/v1/processes/nonexistent/log/stdout", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+// --- Readyz with process filter not ready ---
+
+func TestReadyzProcessFilterNotReady(t *testing.T) {
+	srv, _, di := testServer()
+	di.ready = false
+	req := httptest.NewRequest("GET", "/readyz?process=web,worker", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["status"] != "not_ready" {
+		t.Fatalf("expected not_ready, got %v", body["status"])
+	}
+}
+
+// --- UnixAddr and TCPAddr when not started ---
+
+func TestUnixAddrEmpty(t *testing.T) {
+	srv, _, _ := testServer()
+	if addr := srv.UnixAddr(); addr != "" {
+		t.Fatalf("expected empty, got %s", addr)
+	}
+}
+
+func TestTCPAddrEmpty(t *testing.T) {
+	srv, _, _ := testServer()
+	if addr := srv.TCPAddr(); addr != "" {
+		t.Fatalf("expected empty, got %s", addr)
+	}
+}
+
+// --- classifyError ---
+
+func TestClassifyErrorNotRunning(t *testing.T) {
+	code := classifyError(fmt.Errorf("process not running"))
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", code)
+	}
+}
+
+func TestClassifyErrorDoesNotAcceptStdin(t *testing.T) {
+	code := classifyError(fmt.Errorf("process does not accept stdin"))
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", code)
+	}
+}
+
+func TestClassifyErrorAlreadyRunning(t *testing.T) {
+	code := classifyError(fmt.Errorf("already running"))
+	if code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", code)
+	}
+}
+
+func TestClassifyErrorDefault(t *testing.T) {
+	code := classifyError(fmt.Errorf("some unknown error"))
+	if code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", code)
+	}
+}
+
+// --- LogStream SSE invalid stream ---
+
+func TestLogStreamSSEInvalidStream(t *testing.T) {
+	srv, _, _ := testServer()
+	req := httptest.NewRequest("GET", "/api/v1/processes/web/log/invalid/stream", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }

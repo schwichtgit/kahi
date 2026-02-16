@@ -91,6 +91,28 @@ func mockAPIServer() *httptest.Server {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "started", "group": name})
 	})
 
+	mux.HandleFunc("POST /api/v1/groups/{name}/stop", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "stopped", "group": name})
+	})
+
+	mux.HandleFunc("POST /api/v1/groups/{name}/restart", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "restarted", "group": name})
+	})
+
+	mux.HandleFunc("POST /api/v1/processes/{name}/stdin", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		var body struct {
+			Data string `json:"data"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "written", "name": name})
+	})
+
 	mux.HandleFunc("GET /api/v1/config", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"test": "config"})
@@ -113,9 +135,10 @@ func mockAPIServer() *httptest.Server {
 
 	mux.HandleFunc("GET /api/v1/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"version": "1.0.0",
 			"commit":  "abc123",
+			"pid":     42,
 		})
 	})
 
@@ -458,6 +481,110 @@ func TestClientEmptyStatusTable(t *testing.T) {
 	}
 }
 
+func TestClientStopGroup(t *testing.T) {
+	ts := mockAPIServer()
+	defer ts.Close()
+	c := testClient(ts)
+
+	if err := c.StopGroup("web"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientRestartGroup(t *testing.T) {
+	ts := mockAPIServer()
+	defer ts.Close()
+	c := testClient(ts)
+
+	if err := c.RestartGroup("web"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientReread(t *testing.T) {
+	ts := mockAPIServer()
+	defer ts.Close()
+	c := testClient(ts)
+
+	result, err := c.Reread()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["status"] != "reloaded" {
+		t.Fatalf("expected reloaded, got %v", result["status"])
+	}
+}
+
+func TestClientWriteStdin(t *testing.T) {
+	ts := mockAPIServer()
+	defer ts.Close()
+	c := testClient(ts)
+
+	if err := c.WriteStdin("web", "hello"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNewUnixClient(t *testing.T) {
+	c := NewUnixClient("/tmp/kahi-test.sock")
+	if c == nil {
+		t.Fatal("expected non-nil client")
+	}
+	if c.baseURL != "http://unix" {
+		t.Fatalf("expected baseURL 'http://unix', got %q", c.baseURL)
+	}
+	if c.httpClient == nil {
+		t.Fatal("expected non-nil httpClient")
+	}
+}
+
+func TestClientPIDDaemon(t *testing.T) {
+	ts := mockAPIServer()
+	defer ts.Close()
+	c := testClient(ts)
+
+	pid, err := c.PID("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pid == "" {
+		t.Fatal("expected non-empty pid")
+	}
+}
+
+func TestClientTailError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/processes/{name}/log/{stream}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "process not running"})
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	addr := strings.TrimPrefix(ts.URL, "http://")
+	c := NewTCPClient(addr, "", "")
+
+	var buf bytes.Buffer
+	err := c.Tail("web", "stdout", 1600, &buf)
+	if err == nil {
+		t.Fatal("expected error for 400 response")
+	}
+	if !strings.Contains(err.Error(), "process not running") {
+		t.Fatalf("expected 'process not running', got: %s", err)
+	}
+}
+
+func TestColorStateStopping(t *testing.T) {
+	result := colorState("STOPPING")
+	if !strings.Contains(result, "\033[33m") {
+		t.Fatal("expected yellow for STOPPING")
+	}
+	if !strings.Contains(result, "STOPPING") {
+		t.Fatal("expected STOPPING in output")
+	}
+}
+
 func TestClientTailFollow(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/processes/{name}/log/{stream}/stream",
@@ -481,5 +608,194 @@ func TestClientTailFollow(t *testing.T) {
 
 	if !strings.Contains(buf.String(), "hello world") {
 		t.Fatalf("expected 'hello world', got: %s", buf.String())
+	}
+}
+
+func TestClientBasicAuth(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/processes/{name}/start", func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok := r.BasicAuth()
+		if !ok || user != "admin" || pass != "secret" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	addr := strings.TrimPrefix(ts.URL, "http://")
+	c := NewTCPClient(addr, "admin", "secret")
+
+	if err := c.Start("web"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClientTailFollowError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/processes/{name}/log/{stream}/stream",
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "process not running"})
+		})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	addr := strings.TrimPrefix(ts.URL, "http://")
+	c := NewTCPClient(addr, "", "")
+
+	ctx := context.Background()
+	var buf bytes.Buffer
+	err := c.TailFollow(ctx, "web", "stdout", &buf)
+	if err == nil {
+		t.Fatal("expected error for 400 response")
+	}
+	if !strings.Contains(err.Error(), "process not running") {
+		t.Fatalf("expected 'process not running', got: %s", err)
+	}
+}
+
+func TestClientTailErrorNonJSON(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/processes/{name}/log/{stream}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("internal error"))
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	addr := strings.TrimPrefix(ts.URL, "http://")
+	c := NewTCPClient(addr, "", "")
+
+	var buf bytes.Buffer
+	err := c.Tail("web", "stdout", 1600, &buf)
+	if err == nil {
+		t.Fatal("expected error for 500 response")
+	}
+	if !strings.Contains(err.Error(), "server error") {
+		t.Fatalf("expected 'server error', got: %s", err)
+	}
+}
+
+func TestClientTailFollowErrorNonJSON(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/processes/{name}/log/{stream}/stream",
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("internal error"))
+		})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	addr := strings.TrimPrefix(ts.URL, "http://")
+	c := NewTCPClient(addr, "", "")
+
+	ctx := context.Background()
+	var buf bytes.Buffer
+	err := c.TailFollow(ctx, "web", "stdout", &buf)
+	if err == nil {
+		t.Fatal("expected error for 500 response")
+	}
+	if !strings.Contains(err.Error(), "server error") {
+		t.Fatalf("expected 'server error', got: %s", err)
+	}
+}
+
+func TestClientTailDefaultStream(t *testing.T) {
+	ts := mockAPIServer()
+	defer ts.Close()
+	c := testClient(ts)
+
+	var buf bytes.Buffer
+	if err := c.Tail("web", "", 1600, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "log line 1") {
+		t.Fatal("expected log output with default stream")
+	}
+}
+
+func TestClientTailFollowDefaultStream(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/processes/{name}/log/{stream}/stream",
+		func(w http.ResponseWriter, r *http.Request) {
+			stream := r.PathValue("stream")
+			if stream != "stdout" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			flusher := w.(http.Flusher)
+			fmt.Fprint(w, "data: default stream\n\n")
+			flusher.Flush()
+		})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	addr := strings.TrimPrefix(ts.URL, "http://")
+	c := NewTCPClient(addr, "", "")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	var buf bytes.Buffer
+	_ = c.TailFollow(ctx, "web", "", &buf)
+
+	if !strings.Contains(buf.String(), "default stream") {
+		t.Fatalf("expected 'default stream', got: %s", buf.String())
+	}
+}
+
+func TestClientTailFollowWithAuth(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/processes/{name}/log/{stream}/stream",
+		func(w http.ResponseWriter, r *http.Request) {
+			user, pass, ok := r.BasicAuth()
+			if !ok || user != "admin" || pass != "secret" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+				return
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			flusher := w.(http.Flusher)
+			fmt.Fprint(w, "data: authed\n\n")
+			flusher.Flush()
+		})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	addr := strings.TrimPrefix(ts.URL, "http://")
+	c := NewTCPClient(addr, "admin", "secret")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	var buf bytes.Buffer
+	_ = c.TailFollow(ctx, "web", "stdout", &buf)
+
+	if !strings.Contains(buf.String(), "authed") {
+		t.Fatalf("expected 'authed', got: %s", buf.String())
+	}
+}
+
+func TestClientReadyWithProcesses(t *testing.T) {
+	ts := mockAPIServer()
+	defer ts.Close()
+	c := testClient(ts)
+
+	status, err := c.Ready([]string{"web", "worker"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != "ready" {
+		t.Fatalf("expected ready, got %s", status)
 	}
 }

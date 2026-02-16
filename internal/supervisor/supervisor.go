@@ -40,10 +40,14 @@ func (sq *SignalQueue) Stop() {
 	signal.Stop(sq.ch)
 }
 
+// getuid is the function used to retrieve the current user ID.
+// It defaults to os.Getuid and can be overridden in tests.
+var getuid = os.Getuid
+
 // RootWarning logs a warning if the process is running as root (uid 0)
 // without a configured user for privilege dropping.
 func RootWarning(logger *slog.Logger, userConfigured bool) {
-	if os.Getuid() != 0 {
+	if getuid() != 0 {
 		return
 	}
 	if userConfigured {
