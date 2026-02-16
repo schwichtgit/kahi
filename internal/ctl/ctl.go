@@ -270,7 +270,9 @@ func (c *Client) Tail(name, stream string, bytes int, w io.Writer) error {
 
 	if resp.StatusCode >= 400 {
 		var errBody map[string]string
-		json.NewDecoder(resp.Body).Decode(&errBody)
+		if err := json.NewDecoder(resp.Body).Decode(&errBody); err != nil {
+			return fmt.Errorf("server error (status %d)", resp.StatusCode)
+		}
 		return fmt.Errorf("%s", errBody["error"])
 	}
 
@@ -301,7 +303,9 @@ func (c *Client) TailFollow(ctx context.Context, name, stream string, w io.Write
 
 	if resp.StatusCode >= 400 {
 		var errBody map[string]string
-		json.NewDecoder(resp.Body).Decode(&errBody)
+		if err := json.NewDecoder(resp.Body).Decode(&errBody); err != nil {
+			return fmt.Errorf("server error (status %d)", resp.StatusCode)
+		}
 		return fmt.Errorf("%s", errBody["error"])
 	}
 
@@ -386,7 +390,9 @@ func (c *Client) Health() (string, error) {
 	defer resp.Body.Close()
 
 	var body map[string]string
-	json.NewDecoder(resp.Body).Decode(&body)
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return "", fmt.Errorf("invalid response: %w", err)
+	}
 	return body["status"], nil
 }
 
@@ -403,7 +409,9 @@ func (c *Client) Ready(processes []string) (string, error) {
 	defer resp.Body.Close()
 
 	var body map[string]any
-	json.NewDecoder(resp.Body).Decode(&body)
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return "", fmt.Errorf("invalid response: %w", err)
+	}
 	status, _ := body["status"].(string)
 	return status, nil
 }

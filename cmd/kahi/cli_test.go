@@ -84,7 +84,7 @@ func TestHashPasswordCommand(t *testing.T) {
 	t.Cleanup(func() { os.Stdin = oldStdin })
 
 	go func() {
-		w.Write([]byte("testpassword\n"))
+		_, _ = w.Write([]byte("testpassword\n"))
 		w.Close()
 	}()
 

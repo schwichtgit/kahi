@@ -24,7 +24,7 @@ func mockAPIServer() *httptest.Server {
 
 	mux.HandleFunc("GET /api/v1/processes", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(processes)
+		_ = json.NewEncoder(w).Encode(processes)
 	})
 
 	mux.HandleFunc("GET /api/v1/processes/{name}", func(w http.ResponseWriter, r *http.Request) {
@@ -32,31 +32,31 @@ func mockAPIServer() *httptest.Server {
 		for _, p := range processes {
 			if p.Name == name {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(p)
+				_ = json.NewEncoder(w).Encode(p)
 				return
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("no such process: %s", name)})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("no such process: %s", name)})
 	})
 
 	mux.HandleFunc("POST /api/v1/processes/{name}/start", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "started", "name": name})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "started", "name": name})
 	})
 
 	mux.HandleFunc("POST /api/v1/processes/{name}/stop", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "stopped", "name": name})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "stopped", "name": name})
 	})
 
 	mux.HandleFunc("POST /api/v1/processes/{name}/restart", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "restarted", "name": name})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "restarted", "name": name})
 	})
 
 	mux.HandleFunc("POST /api/v1/processes/{name}/signal", func(w http.ResponseWriter, r *http.Request) {
@@ -64,41 +64,41 @@ func mockAPIServer() *httptest.Server {
 		var body struct {
 			Signal string `json:"signal"`
 		}
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 		if body.Signal == "INVALID" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "invalid signal: INVALID"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid signal: INVALID"})
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "signaled", "name": name})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "signaled", "name": name})
 	})
 
 	mux.HandleFunc("GET /api/v1/processes/{name}/log/{stream}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("log line 1\nlog line 2\n"))
+		_, _ = w.Write([]byte("log line 1\nlog line 2\n"))
 	})
 
 	mux.HandleFunc("GET /api/v1/groups", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]string{"web", "worker"})
+		_ = json.NewEncoder(w).Encode([]string{"web", "worker"})
 	})
 
 	mux.HandleFunc("POST /api/v1/groups/{name}/start", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "started", "group": name})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "started", "group": name})
 	})
 
 	mux.HandleFunc("GET /api/v1/config", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"test": "config"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"test": "config"})
 	})
 
 	mux.HandleFunc("POST /api/v1/config/reload", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"status":  "reloaded",
 			"added":   []string{"new"},
 			"changed": []string{},
@@ -108,12 +108,12 @@ func mockAPIServer() *httptest.Server {
 
 	mux.HandleFunc("POST /api/v1/shutdown", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "shutting_down"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "shutting_down"})
 	})
 
 	mux.HandleFunc("GET /api/v1/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"version": "1.0.0",
 			"commit":  "abc123",
 		})
@@ -121,12 +121,12 @@ func mockAPIServer() *httptest.Server {
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
 	})
 
 	return httptest.NewServer(mux)
@@ -394,7 +394,9 @@ func TestStatusTableFormat(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	formatStatusTable(procs, &buf, false)
+	if err := formatStatusTable(procs, &buf, false); err != nil {
+		t.Fatal(err)
+	}
 	output := buf.String()
 
 	if !strings.Contains(output, "NAME") {
@@ -437,7 +439,7 @@ func TestClientEmptyStatusTable(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/processes", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]ProcessInfo{})
+		_ = json.NewEncoder(w).Encode([]ProcessInfo{})
 	})
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
@@ -475,7 +477,7 @@ func TestClientTailFollow(t *testing.T) {
 	defer cancel()
 
 	var buf bytes.Buffer
-	c.TailFollow(ctx, "web", "stdout", &buf)
+	_ = c.TailFollow(ctx, "web", "stdout", &buf)
 
 	if !strings.Contains(buf.String(), "hello world") {
 		t.Fatalf("expected 'hello world', got: %s", buf.String())

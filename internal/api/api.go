@@ -11,7 +11,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/kahidev/kahi/internal/events"
@@ -80,7 +79,6 @@ type Server struct {
 	unixServer *http.Server
 	tcpServer  *http.Server
 
-	mu       sync.Mutex
 	authUser string
 	authPass string // bcrypt hash
 }
@@ -408,7 +406,7 @@ func (s *Server) handleReadLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func (s *Server) handleStreamLog(w http.ResponseWriter, r *http.Request) {
@@ -659,7 +657,7 @@ func checkPassword(plain, hash string) bool {
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 func writeError(w http.ResponseWriter, status int, message, code string) {

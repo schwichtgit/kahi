@@ -158,7 +158,9 @@ func TestHealthzOK(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var body map[string]string
-	json.Unmarshal(w.Body.Bytes(), &body)
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
 	if body["status"] != "ok" {
 		t.Fatalf("expected ok, got %s", body["status"])
 	}
@@ -255,7 +257,9 @@ func TestListProcesses(t *testing.T) {
 	}
 
 	var procs []ProcessInfo
-	json.Unmarshal(w.Body.Bytes(), &procs)
+	if err := json.Unmarshal(w.Body.Bytes(), &procs); err != nil {
+		t.Fatal(err)
+	}
 	if len(procs) != 2 {
 		t.Fatalf("expected 2 processes, got %d", len(procs))
 	}
@@ -282,7 +286,9 @@ func TestGetProcessNotFound(t *testing.T) {
 		t.Fatalf("expected 404, got %d", w.Code)
 	}
 	var body map[string]string
-	json.Unmarshal(w.Body.Bytes(), &body)
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
 	if body["code"] != "NOT_FOUND" {
 		t.Fatalf("expected NOT_FOUND, got %s", body["code"])
 	}
@@ -461,7 +467,9 @@ func TestReloadConfig(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var body map[string]any
-	json.Unmarshal(w.Body.Bytes(), &body)
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
 	if body["status"] != "reloaded" {
 		t.Fatalf("expected reloaded, got %v", body["status"])
 	}
@@ -479,7 +487,9 @@ func TestVersion(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var body map[string]string
-	json.Unmarshal(w.Body.Bytes(), &body)
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
 	if body["version"] != "dev" {
 		t.Fatalf("expected dev, got %s", body["version"])
 	}
@@ -621,7 +631,7 @@ func TestUnixSocketServer(t *testing.T) {
 	if err := srv.StartUnix(sockPath, 0770); err != nil {
 		t.Fatal(err)
 	}
-	defer srv.Stop(context.Background())
+	defer func() { _ = srv.Stop(context.Background()) }()
 
 	// Verify socket exists.
 	info, err := os.Stat(sockPath)
@@ -665,7 +675,7 @@ func TestUnixSocketStaleCleanup(t *testing.T) {
 	if err := srv.StartUnix(sockPath, 0770); err != nil {
 		t.Fatal(err)
 	}
-	defer srv.Stop(context.Background())
+	defer func() { _ = srv.Stop(context.Background()) }()
 
 	if srv.UnixAddr() == "" {
 		t.Fatal("expected non-empty unix addr")
@@ -681,7 +691,7 @@ func TestUnixSocketCleanupOnShutdown(t *testing.T) {
 	if err := srv.StartUnix(sockPath, 0700); err != nil {
 		t.Fatal(err)
 	}
-	srv.Stop(context.Background())
+	_ = srv.Stop(context.Background())
 }
 
 // --- TCP server tests ---
