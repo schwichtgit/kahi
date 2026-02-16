@@ -93,7 +93,7 @@ func (m *mockGroupManager) StartGroup(name string) error {
 	}
 	return fmt.Errorf("no such group: %s", name)
 }
-func (m *mockGroupManager) StopGroup(name string) error  { return m.StartGroup(name) }
+func (m *mockGroupManager) StopGroup(name string) error    { return m.StartGroup(name) }
 func (m *mockGroupManager) RestartGroup(name string) error { return m.StartGroup(name) }
 
 type mockConfigManager struct {
@@ -126,8 +126,8 @@ func (m *mockDaemonInfo) CheckReady(processes []string) (bool, []string, error) 
 func (m *mockDaemonInfo) Version() map[string]string {
 	return map[string]string{"version": "dev", "commit": "abc123"}
 }
-func (m *mockDaemonInfo) PID() int   { return 12345 }
-func (m *mockDaemonInfo) Shutdown()  {}
+func (m *mockDaemonInfo) PID() int  { return 12345 }
+func (m *mockDaemonInfo) Shutdown() {}
 
 func testServer() (*Server, *mockProcessManager, *mockDaemonInfo) {
 	pm := &mockProcessManager{

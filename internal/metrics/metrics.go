@@ -14,7 +14,7 @@ type Collector struct {
 	registry *prometheus.Registry
 
 	// Per-process metrics.
-	ProcessState     *prometheus.GaugeVec
+	ProcessState      *prometheus.GaugeVec
 	ProcessStartTotal *prometheus.CounterVec
 	ProcessExitTotal  *prometheus.CounterVec
 	ProcessUptime     *prometheus.GaugeVec

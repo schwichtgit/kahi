@@ -27,12 +27,12 @@ type WebhookConfig struct {
 
 // WebhookManager subscribes to events and delivers HTTP POST notifications.
 type WebhookManager struct {
-	bus     *Bus
-	logger  *slog.Logger
-	hooks   []webhookEntry
-	client  *http.Client
-	mu      sync.Mutex
-	subIDs  []uint64
+	bus    *Bus
+	logger *slog.Logger
+	hooks  []webhookEntry
+	client *http.Client
+	mu     sync.Mutex
+	subIDs []uint64
 }
 
 type webhookEntry struct {

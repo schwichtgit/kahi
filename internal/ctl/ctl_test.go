@@ -61,7 +61,9 @@ func mockAPIServer() *httptest.Server {
 
 	mux.HandleFunc("POST /api/v1/processes/{name}/signal", func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
-		var body struct{ Signal string `json:"signal"` }
+		var body struct {
+			Signal string `json:"signal"`
+		}
 		json.NewDecoder(r.Body).Decode(&body)
 		if body.Signal == "INVALID" {
 			w.Header().Set("Content-Type", "application/json")
