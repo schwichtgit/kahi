@@ -232,3 +232,139 @@ func TestClockRollbackDoesNotCausePrematureRunning(t *testing.T) {
 		t.Fatal("clock rollback should not cause RUNNING")
 	}
 }
+
+func TestBackoffDelay(t *testing.T) {
+	clk := newMockClock()
+	sm := newSM(5, 10, clk)
+
+	// Zero retries returns 1 second
+	if d := sm.BackoffDelay(); d != time.Second {
+		t.Fatalf("delay at 0 retries = %v, want 1s", d)
+	}
+
+	// After 1 retry: 2^0 = 1s
+	mustTransition(t, sm.RequestStart)
+	mustTransitionState(t, sm.ProcessExitedEarly)
+	if d := sm.BackoffDelay(); d != time.Second {
+		t.Fatalf("delay at 1 retry = %v, want 1s", d)
+	}
+
+	// After 2 retries: 2^1 = 2s
+	mustTransition(t, sm.RetryFromBackoff)
+	mustTransitionState(t, sm.ProcessExitedEarly)
+	if d := sm.BackoffDelay(); d != 2*time.Second {
+		t.Fatalf("delay at 2 retries = %v, want 2s", d)
+	}
+
+	// After 3 retries: 2^2 = 4s
+	mustTransition(t, sm.RetryFromBackoff)
+	mustTransitionState(t, sm.ProcessExitedEarly)
+	if d := sm.BackoffDelay(); d != 4*time.Second {
+		t.Fatalf("delay at 3 retries = %v, want 4s", d)
+	}
+}
+
+func TestBackoffDelayCapsAt60s(t *testing.T) {
+	clk := newMockClock()
+	sm := newSM(5, 20, clk)
+
+	// Drive retries to 8: 2^7 = 128s, should cap at 60s
+	mustTransition(t, sm.RequestStart)
+	mustTransitionState(t, sm.ProcessExitedEarly)
+	for i := 1; i < 8; i++ {
+		mustTransition(t, sm.RetryFromBackoff)
+		mustTransitionState(t, sm.ProcessExitedEarly)
+	}
+
+	if d := sm.BackoffDelay(); d != 60*time.Second {
+		t.Fatalf("delay at 8 retries = %v, want 60s (capped)", d)
+	}
+}
+
+func TestNewStateMachineNilClock(t *testing.T) {
+	sm := NewStateMachine(StateMachineConfig{
+		Startsecs:    1,
+		Startretries: 3,
+		Clock:        nil,
+	})
+	if sm.State() != Stopped {
+		t.Fatalf("state = %s, want STOPPED", sm.State())
+	}
+	// Verify the clock works (doesn't panic)
+	mustTransition(t, sm.RequestStart)
+}
+
+func TestStateString(t *testing.T) {
+	tests := []struct {
+		state State
+		want  string
+	}{
+		{Stopped, "STOPPED"},
+		{Starting, "STARTING"},
+		{Running, "RUNNING"},
+		{Backoff, "BACKOFF"},
+		{Stopping, "STOPPING"},
+		{Exited, "EXITED"},
+		{Fatal, "FATAL"},
+		{State(99), "UNKNOWN(99)"},
+	}
+	for _, tt := range tests {
+		if got := tt.state.String(); got != tt.want {
+			t.Errorf("State(%d).String() = %q, want %q", tt.state, got, tt.want)
+		}
+	}
+}
+
+func TestProcessStartedInWrongState(t *testing.T) {
+	sm := newSM(1, 3, newMockClock())
+	// Call ProcessStarted while STOPPED (not STARTING)
+	s, err := sm.ProcessStarted()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s != Stopped {
+		t.Fatalf("state = %s, want STOPPED (no-op)", s)
+	}
+}
+
+func TestProcessExitedEarlyInWrongState(t *testing.T) {
+	sm := newSM(1, 3, newMockClock())
+	// Call ProcessExitedEarly while STOPPED
+	_, err := sm.ProcessExitedEarly()
+	if err == nil {
+		t.Fatal("expected error for ProcessExitedEarly in STOPPED state")
+	}
+}
+
+func TestProcessExitedInWrongState(t *testing.T) {
+	sm := newSM(1, 3, newMockClock())
+	// Call ProcessExited while STOPPED
+	_, err := sm.ProcessExited()
+	if err == nil {
+		t.Fatal("expected error for ProcessExited in STOPPED state")
+	}
+}
+
+func TestRetryFromBackoffInWrongState(t *testing.T) {
+	sm := newSM(1, 3, newMockClock())
+	// Call RetryFromBackoff while STOPPED
+	err := sm.RetryFromBackoff()
+	if err == nil {
+		t.Fatal("expected error for RetryFromBackoff in STOPPED state")
+	}
+}
+
+func TestRealClock(t *testing.T) {
+	clk := RealClock()
+	now := clk.Now()
+	if now.IsZero() {
+		t.Fatal("RealClock.Now() returned zero time")
+	}
+	ch := clk.After(time.Millisecond)
+	select {
+	case <-ch:
+		// ok
+	case <-time.After(time.Second):
+		t.Fatal("RealClock.After() did not fire")
+	}
+}
