@@ -30,6 +30,24 @@ func newSM(startsecs, retries int, clk Clock) *StateMachine {
 	})
 }
 
+// mustTransition is a test helper that calls a function and fails the test on error.
+func mustTransition(t *testing.T, fn func() error) {
+	t.Helper()
+	if err := fn(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// mustTransitionState is a test helper that calls a state-returning function and fails on error.
+func mustTransitionState(t *testing.T, fn func() (State, error)) State {
+	t.Helper()
+	s, err := fn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
 func TestStoppedToStarting(t *testing.T) {
 	sm := newSM(1, 3, newMockClock())
 	if err := sm.RequestStart(); err != nil {
@@ -43,18 +61,18 @@ func TestStoppedToStarting(t *testing.T) {
 func TestStartingToRunningAfterStartsecs(t *testing.T) {
 	clk := newMockClock()
 	sm := newSM(2, 3, clk)
-	sm.RequestStart()
+	mustTransition(t, sm.RequestStart)
 
 	// Before startsecs
 	clk.Advance(1 * time.Second)
-	s, _ := sm.ProcessStarted()
+	s := mustTransitionState(t, sm.ProcessStarted)
 	if s != Starting {
 		t.Fatalf("state = %s, want STARTING (before startsecs)", s)
 	}
 
 	// After startsecs
 	clk.Advance(2 * time.Second)
-	s, _ = sm.ProcessStarted()
+	s = mustTransitionState(t, sm.ProcessStarted)
 	if s != Running {
 		t.Fatalf("state = %s, want RUNNING (after startsecs)", s)
 	}
@@ -63,12 +81,9 @@ func TestStartingToRunningAfterStartsecs(t *testing.T) {
 func TestStartingToBackoffOnEarlyExit(t *testing.T) {
 	clk := newMockClock()
 	sm := newSM(5, 3, clk)
-	sm.RequestStart()
+	mustTransition(t, sm.RequestStart)
 
-	s, err := sm.ProcessExitedEarly()
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := mustTransitionState(t, sm.ProcessExitedEarly)
 	if s != Backoff {
 		t.Fatalf("state = %s, want BACKOFF", s)
 	}
@@ -77,8 +92,8 @@ func TestStartingToBackoffOnEarlyExit(t *testing.T) {
 func TestBackoffToStartingOnRetry(t *testing.T) {
 	clk := newMockClock()
 	sm := newSM(5, 3, clk)
-	sm.RequestStart()
-	sm.ProcessExitedEarly()
+	mustTransition(t, sm.RequestStart)
+	mustTransitionState(t, sm.ProcessExitedEarly)
 
 	if err := sm.RetryFromBackoff(); err != nil {
 		t.Fatal(err)
@@ -93,19 +108,16 @@ func TestBackoffToFatalOnRetryExhaustion(t *testing.T) {
 	sm := newSM(5, 2, clk)
 
 	// Attempt 1
-	sm.RequestStart()
-	sm.ProcessExitedEarly() // retries=1, backoff
-	sm.RetryFromBackoff()
+	mustTransition(t, sm.RequestStart)
+	mustTransitionState(t, sm.ProcessExitedEarly)
+	mustTransition(t, sm.RetryFromBackoff)
 
 	// Attempt 2
-	sm.ProcessExitedEarly() // retries=2, backoff
-	sm.RetryFromBackoff()
+	mustTransitionState(t, sm.ProcessExitedEarly)
+	mustTransition(t, sm.RetryFromBackoff)
 
 	// Attempt 3 -- exceeds maxRetries=2
-	s, err := sm.ProcessExitedEarly()
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := mustTransitionState(t, sm.ProcessExitedEarly)
 	if s != Fatal {
 		t.Fatalf("state = %s, want FATAL", s)
 	}
@@ -114,8 +126,8 @@ func TestBackoffToFatalOnRetryExhaustion(t *testing.T) {
 func TestRunningToStoppingOnStop(t *testing.T) {
 	clk := newMockClock()
 	sm := newSM(0, 3, clk) // startsecs=0 means immediate RUNNING
-	sm.RequestStart()
-	sm.ProcessStarted()
+	mustTransition(t, sm.RequestStart)
+	mustTransitionState(t, sm.ProcessStarted)
 
 	if err := sm.RequestStop(); err != nil {
 		t.Fatal(err)
@@ -131,14 +143,11 @@ func TestRunningToStoppingOnStop(t *testing.T) {
 func TestStoppingToStoppedOnExit(t *testing.T) {
 	clk := newMockClock()
 	sm := newSM(0, 3, clk)
-	sm.RequestStart()
-	sm.ProcessStarted()
-	sm.RequestStop()
+	mustTransition(t, sm.RequestStart)
+	mustTransitionState(t, sm.ProcessStarted)
+	mustTransition(t, sm.RequestStop)
 
-	_, err := sm.ProcessExited()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustTransitionState(t, sm.ProcessExited)
 	if sm.State() != Stopped {
 		t.Fatalf("state = %s, want STOPPED", sm.State())
 	}
@@ -147,13 +156,10 @@ func TestStoppingToStoppedOnExit(t *testing.T) {
 func TestRunningToExitedOnSelfExit(t *testing.T) {
 	clk := newMockClock()
 	sm := newSM(0, 3, clk)
-	sm.RequestStart()
-	sm.ProcessStarted()
+	mustTransition(t, sm.RequestStart)
+	mustTransitionState(t, sm.ProcessStarted)
 
-	_, err := sm.ProcessExited()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustTransitionState(t, sm.ProcessExited)
 	if sm.State() != Exited {
 		t.Fatalf("state = %s, want EXITED", sm.State())
 	}
@@ -173,17 +179,17 @@ func TestRetryCounterResetsOnRunning(t *testing.T) {
 	sm := newSM(0, 5, clk)
 
 	// Fail twice
-	sm.RequestStart()
-	sm.ProcessExitedEarly()
-	sm.RetryFromBackoff()
-	sm.ProcessExitedEarly()
+	mustTransition(t, sm.RequestStart)
+	mustTransitionState(t, sm.ProcessExitedEarly)
+	mustTransition(t, sm.RetryFromBackoff)
+	mustTransitionState(t, sm.ProcessExitedEarly)
 	if sm.Retries() != 2 {
 		t.Fatalf("retries = %d, want 2", sm.Retries())
 	}
 
 	// Succeed
-	sm.RetryFromBackoff()
-	sm.ProcessStarted() // startsecs=0 -> immediate RUNNING
+	mustTransition(t, sm.RetryFromBackoff)
+	mustTransitionState(t, sm.ProcessStarted) // startsecs=0 -> immediate RUNNING
 	if sm.Retries() != 0 {
 		t.Fatalf("retries after RUNNING = %d, want 0", sm.Retries())
 	}
@@ -196,14 +202,11 @@ func TestStoppingToExitedWorks(t *testing.T) {
 	// always works regardless of exit cause.
 	clk := newMockClock()
 	sm := newSM(0, 3, clk)
-	sm.RequestStart()
-	sm.ProcessStarted()
-	sm.RequestStop()
+	mustTransition(t, sm.RequestStart)
+	mustTransitionState(t, sm.ProcessStarted)
+	mustTransition(t, sm.RequestStop)
 
-	_, err := sm.ProcessExited()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustTransitionState(t, sm.ProcessExited)
 	// Our design: STOPPING always goes to STOPPED
 	if sm.State() != Stopped {
 		t.Fatalf("state = %s, want STOPPED", sm.State())
@@ -213,18 +216,18 @@ func TestStoppingToExitedWorks(t *testing.T) {
 func TestClockRollbackDoesNotCausePrematureRunning(t *testing.T) {
 	clk := newMockClock()
 	sm := newSM(5, 3, clk)
-	sm.RequestStart()
+	mustTransition(t, sm.RequestStart)
 
 	// Advance 3 seconds
 	clk.Advance(3 * time.Second)
-	s, _ := sm.ProcessStarted()
+	s := mustTransitionState(t, sm.ProcessStarted)
 	if s != Starting {
 		t.Fatal("should still be STARTING")
 	}
 
 	// Roll back clock by 4 seconds (net: -1 second from start)
 	clk.Advance(-4 * time.Second)
-	s, _ = sm.ProcessStarted()
+	s = mustTransitionState(t, sm.ProcessStarted)
 	if s != Starting {
 		t.Fatal("clock rollback should not cause RUNNING")
 	}

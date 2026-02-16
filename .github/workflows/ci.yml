@@ -39,9 +39,7 @@ jobs:
         with:
           version: '3.x'
       - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@v7
-        with:
-          install-only: true
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
       - run: task fmt
         name: Format check
       - run: task vet

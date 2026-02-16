@@ -130,15 +130,12 @@ func (sm *StateMachine) transitionLocked(target State) error {
 }
 
 func (sm *StateMachine) applyTransition(target State) {
-	prev := sm.state
 	sm.state = target
 
 	switch target {
 	case Starting:
 		sm.startedAt = sm.clock.Now()
-		if prev == Stopped || prev == Exited || prev == Fatal {
-			// Fresh start -- do not reset retries here; reset on reaching Running.
-		}
+		// Retries reset on reaching Running, not on fresh start.
 	case Running:
 		sm.retries = 0 // reset on successful start
 	case Backoff:

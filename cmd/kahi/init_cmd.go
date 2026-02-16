@@ -18,8 +18,8 @@ var initCmd = &cobra.Command{
 		content := config.DefaultConfigTOML
 
 		if initOutput == "" {
-			fmt.Fprint(cmd.OutOrStdout(), content)
-			return nil
+			_, err := fmt.Fprint(cmd.OutOrStdout(), content)
+			return err
 		}
 
 		if !initForce {
@@ -31,8 +31,8 @@ var initCmd = &cobra.Command{
 		if err := os.WriteFile(initOutput, []byte(content), 0644); err != nil {
 			return fmt.Errorf("cannot write config: %w", err)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", initOutput)
-		return nil
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", initOutput)
+		return err
 	},
 }
 

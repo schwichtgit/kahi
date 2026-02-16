@@ -10,7 +10,9 @@ import (
 func TestResolveExplicitPath(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "kahi.toml")
-	os.WriteFile(path, []byte(""), 0644)
+	if err := os.WriteFile(path, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := Resolve(path)
 	if err != nil {
@@ -34,7 +36,9 @@ func TestResolveExplicitPathNotFound(t *testing.T) {
 func TestResolveEnvVar(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "kahi.toml")
-	os.WriteFile(path, []byte(""), 0644)
+	if err := os.WriteFile(path, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	t.Setenv("KAHI_CONFIG", path)
 	got, err := Resolve("")
@@ -66,8 +70,12 @@ func TestResolveSearchPathOrder(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "first.toml")
 	second := filepath.Join(dir, "second.toml")
-	os.WriteFile(first, []byte(""), 0644)
-	os.WriteFile(second, []byte(""), 0644)
+	if err := os.WriteFile(first, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	t.Setenv("KAHI_CONFIG", "")
 	orig := DefaultSearchPaths
