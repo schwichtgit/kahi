@@ -809,7 +809,7 @@ func TestEventStreamWithTypeFilter(t *testing.T) {
 	if err := srv.StartTCP("127.0.0.1:0"); err != nil {
 		t.Fatal(err)
 	}
-	defer srv.Stop(context.Background())
+	defer func() { _ = srv.Stop(context.Background()) }()
 
 	addr := srv.TCPAddr()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
