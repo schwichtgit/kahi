@@ -305,6 +305,67 @@ var ctlRereadCmd = &cobra.Command{
 	},
 }
 
+var ctlUpdateCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Reload config and apply all changes",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := newCtlClient()
+		result, err := c.Reload()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "updated: added=%v changed=%v removed=%v\n",
+			result["added"], result["changed"], result["removed"])
+		return nil
+	},
+}
+
+var ctlAddCmd = &cobra.Command{
+	Use:   "add <group>",
+	Short: "Activate a new group from config",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := newCtlClient()
+		// Reload first to pick up new config.
+		if _, err := c.Reload(); err != nil {
+			return err
+		}
+		// Start the group.
+		if err := c.StartGroup(args[0]); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "%s: added and started\n", args[0])
+		return nil
+	},
+}
+
+var ctlRemoveCmd = &cobra.Command{
+	Use:   "remove <group>",
+	Short: "Stop and remove a group",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := newCtlClient()
+		// Stop the group first.
+		if err := c.StopGroup(args[0]); err != nil {
+			return fmt.Errorf("stop %s: %w", args[0], err)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "%s: stopped and removed\n", args[0])
+		return nil
+	},
+}
+
+var ctlAttachCmd = &cobra.Command{
+	Use:   "attach <process>",
+	Short: "Attach to a process (stdin/stdout forwarding)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := newCtlClient()
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer cancel()
+		return c.Attach(ctx, args[0], os.Stdin, os.Stdout)
+	},
+}
+
 func init() {
 	ctlCmd.PersistentFlags().StringVarP(&ctlSocket, "socket", "s", "", "Unix socket path")
 	ctlCmd.PersistentFlags().StringVar(&ctlAddr, "addr", "", "TCP address (host:port)")
@@ -324,6 +385,7 @@ func init() {
 		ctlStatusCmd, ctlTailCmd,
 		ctlShutdownCmd, ctlReloadCmd, ctlVersionCmd, ctlPIDCmd,
 		ctlHealthCmd, ctlReadyCmd, ctlSendCmd, ctlRereadCmd,
+		ctlUpdateCmd, ctlAddCmd, ctlRemoveCmd, ctlAttachCmd,
 	)
 	rootCmd.AddCommand(ctlCmd)
 }

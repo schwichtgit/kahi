@@ -158,7 +158,7 @@
         "Write a unit test that verifies a non-executable command results in FATAL state with permission denied error",
         "Write a unit test that attempts to start an already-running process and verifies the error message"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-state-machine",
         "structured-logging"
@@ -181,7 +181,7 @@
         "Write a unit test that verifies killasgroup=false with stopasgroup=true is rejected at config validation",
         "Write a unit test that verifies a process exiting during signal send does not cause errors"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-state-machine",
         "process-start"
@@ -204,7 +204,7 @@
         "Write a unit test with autorestart=unexpected and exitcodes=[0,2] that verifies exit code 2 is treated as expected and does not trigger restart",
         "Write a unit test that verifies autorestart does not apply during STARTING/BACKOFF phases before RUNNING is reached"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-state-machine",
         "process-start"
@@ -223,7 +223,7 @@
         "Write a unit test that verifies backoff delay is capped at a maximum of 60 seconds",
         "Write a unit test using a mock Clock that verifies system clock rollback does not cause negative waits"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-state-machine",
         "process-start"
@@ -242,7 +242,7 @@
         "Write a unit test that verifies the reaping loop stops when waitpid returns ECHILD",
         "Write a unit test that verifies exit status includes both normal exit codes and signal-killed status"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-start"
       ]
@@ -264,7 +264,7 @@
         "Write a unit test that starts all instances and verifies each has a unique PID and unique name",
         "Write a unit test with numprocs=5 and verify all 5 processes are created with sequential numbering"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-start"
       ]
@@ -282,7 +282,7 @@
         "Write a unit test that verifies priority ordering applies to group-level operations",
         "Write a unit test that verifies shutdown uses the same reverse-priority ordering"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-start"
       ]
@@ -299,7 +299,7 @@
         "Verify a program with numprocs=1 creates a group with a single process",
         "Verify group name collisions between programs are caught at config validation time"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "numprocs-instances"
       ]
@@ -317,7 +317,7 @@
         "Verify that when a heterogeneous group exists, implicit homogeneous groups for member programs are suppressed",
         "Parse a config with an empty group (no programs) and verify it is rejected at config validation"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "homogeneous-groups"
       ]
@@ -335,7 +335,7 @@
         "Write a unit test that attempts to remove a nonexistent group and verifies the error message",
         "Write a unit test that removes then re-adds a group and verifies config is re-read"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "homogeneous-groups",
         "heterogeneous-groups"
@@ -358,7 +358,7 @@
         "Parse a config with %(group_name)s in a process environment value and verify it resolves to the group name",
         "Parse a config with multiple variable references in a single value and verify all are expanded correctly"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "toml-config-parser"
       ]
@@ -377,7 +377,7 @@
         "Create two included files defining the same program name and verify a validation error about duplicate names",
         "Verify included files can define programs but cannot override [supervisor] settings"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "toml-config-parser",
         "toml-variable-expansion"
@@ -400,7 +400,7 @@
         "Verify concurrent reload requests are serialized",
         "Write a test that changes numprocs from 2 to 4 and verifies 2 new process instances are added on reload"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "toml-variable-expansion",
         "config-include-system",
@@ -477,7 +477,7 @@
         "Write a test that verifies pipe is closed on process exit and remaining buffered data is flushed",
         "Write a test that verifies large output bursts do not block the child process"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-start",
         "structured-logging"
@@ -496,7 +496,7 @@
         "Write a test that verifies byte size parsing supports B, KB, MB, GB suffixes",
         "Write a test that simulates a rotation rename failure and verifies the daemon continues writing to the current file"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-output-capture"
       ]
@@ -513,7 +513,7 @@
         "Verify syslog forwarding works alongside file logging and console passthrough",
         "Verify syslog facility and priority are configurable with defaults of LOCAL0 and INFO"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-output-capture"
       ]
@@ -529,7 +529,7 @@
         "Write a test that verifies all CSI sequences (colors, cursor movement, etc.) are stripped",
         "Write a test that verifies partial escape sequences at buffer boundaries are handled correctly"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-output-capture"
       ]
@@ -546,7 +546,7 @@
         "Write a test that verifies log reopen is safe to call concurrently with log writes",
         "Write a test that verifies SIGUSR2 during shutdown is ignored"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-output-capture"
       ]
@@ -563,7 +563,7 @@
         "Write a test that simulates a delete failure and verifies a warning is logged and startup continues",
         "Write a test that verifies cleanup happens before any processes are started"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-output-capture"
       ]
@@ -786,7 +786,7 @@
         "Verify terminal raw mode is set during fg session and restored on exit",
         "Write a test that attempts two fg sessions on the same process and verifies the second is rejected"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "cli-process-control"
       ]
@@ -805,7 +805,7 @@
         "Run 'kahi ctl reread' with an invalid config file and verify an error message is displayed",
         "Run 'kahi ctl avail' and verify all configured programs are shown with active/available status"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "cli-process-control",
         "config-hot-reload"
@@ -861,7 +861,7 @@
         "Verify the API continues to serve status requests during shutdown",
         "Verify processes that do not stop within stopwaitsecs receive SIGKILL escalation"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-stop",
         "priority-ordering"
@@ -879,7 +879,7 @@
         "Verify SIGHUP during shutdown is ignored",
         "Verify multiple rapid SIGHUPs are coalesced into a single reload"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "config-hot-reload"
       ]
@@ -895,7 +895,7 @@
         "Verify SIGCHLD is handled via signal.Notify channel in the main goroutine",
         "Verify multiple exits between polls are all collected in a single reaping loop"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-reaping"
       ]
@@ -912,7 +912,7 @@
         "Send SIGUSR2 when no log files are configured and verify the signal is acknowledged without error",
         "Send SIGUSR2 during active log writing and verify no log entries are lost during rotation"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "log-reopen-sigusr2"
       ]
@@ -944,7 +944,7 @@
         "Write a test that simulates setpgid failure and verifies a warning is logged but the process still starts",
         "Verify process group isolation enables stop-as-group behavior for signaling entire child trees"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-start"
       ]
@@ -961,7 +961,7 @@
         "Start Kahi as non-root with config specifying user-accessible paths and verify all operations succeed",
         "Configure a path not writable by the current user and verify exit with permission denied error"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "unix-socket-server"
       ]
@@ -978,7 +978,7 @@
         "Verify supplementary groups are computed from /etc/group",
         "Verify privilege drop happens after socket creation but before processing requests"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "unprivileged-operation"
       ]
@@ -994,7 +994,7 @@
         "Configure a nonexistent user on a process and verify it goes to FATAL with 'user not found' error",
         "Verify user switching sets uid, gid, and supplementary groups before exec"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "privilege-dropping"
       ]
@@ -1011,7 +1011,7 @@
         "Verify the default daemon umask is 0022 when not configured",
         "Verify umask is specified as a 4-digit octal string in config"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-start"
       ]
@@ -1083,7 +1083,7 @@
         "Verify log events contain raw output data before any ANSI stripping",
         "Write a test that verifies stderr log events are emitted when stderr_events_enabled=true"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "event-bus",
         "process-output-capture"
@@ -1118,7 +1118,7 @@
         "Verify GROUP_ADDED event includes the list of process names in the group",
         "Verify GROUP_REMOVED event is emitted when a group is removed during config reload"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "event-bus",
         "group-lifecycle"
@@ -1159,7 +1159,7 @@
         "Verify the event envelope format includes ver, server, serial, pool, poolserial, eventname, len, and payload",
         "Write a test that subscribes to multiple event types in a single listener config and verify all matching events are dispatched"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "event-bus",
         "process-state-events",
@@ -1302,7 +1302,7 @@
         "Press Ctrl+C in foreground mode and verify graceful shutdown is triggered",
         "Verify foreground mode is the default with no flag needed to enable it"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "cli-framework"
       ]
@@ -1320,7 +1320,7 @@
         "Start a second daemon instance with the same PID file and verify it detects the running instance and exits with error",
         "Create a stale PID file (process not running) and start the daemon and verify it is overwritten with a warning"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "foreground-mode"
       ]
@@ -1336,7 +1336,7 @@
         "Verify PID 1 detection occurs at startup using os.Getpid() == 1",
         "Verify the reaping loop runs as part of the main supervision tick, not as a separate goroutine"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-reaping"
       ]
@@ -1354,7 +1354,7 @@
         "Verify the default shutdown timeout is 30 seconds",
         "Verify if total shutdown exceeds timeout, remaining processes are killed and daemon exits"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-stop",
         "priority-ordering"
@@ -1372,7 +1372,7 @@
         "Configure a non-accessible directory and verify error message 'cannot access directory: {path}: {error}' is returned",
         "Verify per-process directory supports variable expansion"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-start",
         "toml-variable-expansion"
@@ -1390,7 +1390,7 @@
         "Verify default values are minfds=1024 and minprocs=200",
         "Verify rlimits are only raised when the current value is below the configured minimum"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "go-module-structure"
       ]
@@ -1501,7 +1501,7 @@
         "Parse a config with an invalid socket format and verify a validation error is returned",
         "Verify FastCGI programs support all standard program options (autorestart, numprocs, etc.)"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-start"
       ]
@@ -1519,7 +1519,7 @@
         "Verify Unix sockets support configurable owner and mode (socket_owner, socket_mode)",
         "Verify the socket is re-created on process restart if it was cleaned up"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "fastcgi-program-definition"
       ]
@@ -1556,7 +1556,7 @@
         "Write stdin to a process without stdin configured and verify 'does not accept stdin' error",
         "Write stdin to a process with a broken pipe and verify error message 'stdin pipe broken for {name}'"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "rest-api-endpoints",
         "process-start"
@@ -1649,7 +1649,7 @@
         "Verify memory is freed when a process config is removed",
         "Verify the ring buffer feeds SSE streaming when no log file exists"
       ],
-      "passes": false,
+      "passes": true,
       "dependencies": [
         "process-output-capture"
       ]
