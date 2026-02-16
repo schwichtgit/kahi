@@ -347,7 +347,7 @@ Infrastructure features have NO dependencies. They establish the foundation.
 
 **Edge Cases:**
 
-- Backoff delay is capped at a reasonable maximum (e.g., 60 seconds)
+- Backoff delay is capped at a maximum of 60 seconds
 - System clock rollback during backoff delay does not cause negative waits
 
 **Dependencies:** FUNC-001, FUNC-002
@@ -829,7 +829,7 @@ Infrastructure features have NO dependencies. They establish the foundation.
 **Edge Cases:**
 
 - Rotation is atomic (rename, not copy+truncate)
-- Rotation check happens periodically, not on every write
+- Rotation check happens after every write batch
 - Byte size parsing supports: B, KB, MB, GB suffixes
 
 **Dependencies:** FUNC-018
@@ -1618,7 +1618,7 @@ Infrastructure features have NO dependencies. They establish the foundation.
 
 **Edge Cases:**
 
-- Channel buffer size should be at least 16 to handle burst scenarios
+- Channel buffer size: 16
 - Signal processing is always in the main goroutine (no concurrent handlers)
 
 **Dependencies:** INFRA-001
@@ -2037,9 +2037,9 @@ Infrastructure features have NO dependencies. They establish the foundation.
 
 | Error Condition | Expected Behavior | User-Facing Message |
 | --- | --- | --- |
-| Webhook POST fails (timeout/5xx) | Retry up to configured max_retries with exponential backoff | "webhook delivery failed for {url}: {error}, retrying" |
+| Webhook POST fails (timeout/5xx) | Retry up to configured max_retries (default: 3) with exponential backoff | "webhook delivery failed for {url}: {error}, retrying" |
 | All retries exhausted | Log error, move on | "webhook delivery failed permanently for {url}" |
-| Webhook URL unreachable | Circuit breaker opens after N consecutive failures | "webhook circuit breaker open for {url}" |
+| Webhook URL unreachable | Circuit breaker opens after 5 consecutive failures | "webhook circuit breaker open for {url}" |
 
 **Edge Cases:**
 
@@ -2156,7 +2156,7 @@ Infrastructure features have NO dependencies. They establish the foundation.
 - **Given** metrics enabled
   **When** processes are running
   **Then** the following metrics are present:
-  - `kahi_process_state{name="web",group="web"}` (gauge: 0=STOPPED, 20=RUNNING, etc.)
+  - `kahi_process_state{name="web",group="web"}` (gauge: STOPPED=0, STARTING=10, RUNNING=20, BACKOFF=30, STOPPING=40, EXITED=100, FATAL=200, UNKNOWN=-1)
   - `kahi_process_start_total{name="web"}` (counter)
   - `kahi_process_exit_total{name="web",expected="true"}` (counter)
   - `kahi_process_uptime_seconds{name="web"}` (gauge)
@@ -2206,7 +2206,7 @@ Infrastructure features have NO dependencies. They establish the foundation.
 **Edge Cases:**
 
 - Metrics survive config reload (counters are not reset)
-- Removed processes have their metrics cleaned up after a configurable retention period
+- Removed processes have their metrics cleaned up after a configurable retention period (default: 5 minutes after removal)
 
 **Dependencies:** FUNC-060
 
@@ -2780,7 +2780,7 @@ Infrastructure features have NO dependencies. They establish the foundation.
 
 **Edge Cases:**
 
-- Log viewer shows last N lines on initial load, then streams new lines
+- Log viewer shows last 100 lines on initial load, then streams new lines
 - ANSI escape codes are rendered as colors in the browser
 - Auto-scroll to bottom with manual scroll override
 
@@ -2872,6 +2872,8 @@ None specific.
 **Edge Cases:**
 
 - Ring buffer is per-process per-stream (stdout and stderr separate)
+- When stdout_capture_maxbytes is set to 0, the ring buffer is disabled and log tailing returns empty results
+- Bounds: minimum 0 (disabled), maximum 100MB
 - Memory is freed when process config is removed
 - Ring buffer feeds SSE streaming when no log file exists
 

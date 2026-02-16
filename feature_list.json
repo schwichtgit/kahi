@@ -381,7 +381,7 @@
         "Write a test that starts Kahi with -c /path/to/config.toml and verifies only the specified path is used",
         "Write a test with no config found in any search path and verify exit with code 1 and descriptive error",
         "Write a test with KAHI_CONFIG env var set and verify it takes precedence over search paths",
-        "Write a test with a non-readable config file and verify exit with an appropriate permission error"
+        "Write a test with a non-readable config file and verify exit with error message 'cannot read config: {path}: {error}'"
       ],
       "passes": false,
       "dependencies": ["toml-config-parser"]
@@ -414,7 +414,7 @@
         "Configure log_level='debug' and verify debug-level messages appear in output",
         "Configure logfile='/tmp/kahi-test.log' and verify daemon logs are written to the specified file",
         "Configure an invalid log level and verify a config validation error is returned",
-        "Configure a non-writable logfile path and verify Kahi exits with an appropriate error",
+        "Configure a non-writable logfile path and verify Kahi exits with error message 'cannot open log file: {path}: {error}'",
         "Verify log file is opened in append mode",
         "Change log level on config reload and verify the new level takes effect immediately"
       ],
@@ -523,7 +523,7 @@
         "Configure socket_chmod='0770' and verify the socket file has permissions 0770",
         "Create a stale socket file from a simulated previous crashed run, start Kahi, and verify it is replaced",
         "Write a test that verifies the socket is cleaned up on graceful shutdown",
-        "Write a test with a non-writable socket path and verify Kahi exits with an appropriate error",
+        "Write a test with a non-writable socket path and verify Kahi exits with error message 'cannot create socket: {path}: {error}'",
         "Write a test with a socket path longer than 108 characters and verify exit with 'socket path too long' error",
         "Write a test that verifies chown on the socket when running as root",
         "Write a test that verifies a warning is logged and chown is skipped when running as non-root",
@@ -542,7 +542,7 @@
         "Configure [server.http] enabled=true and listen='127.0.0.1:9876' and verify an HTTP server listens on that address",
         "Make a request to the TCP server without auth and verify 401 Unauthorized is returned",
         "Configure auth and make a request with valid Basic Auth credentials and verify the request is processed",
-        "Write a test that attempts to bind to an already-used port and verifies exit with appropriate error",
+        "Write a test that attempts to bind to an already-used port and verifies exit with error message 'cannot bind {address}: {error}'",
         "Parse a config with an invalid listen address and verify a validation error is returned",
         "Configure listen='0.0.0.0:9876' and verify a security warning is logged"
       ],
@@ -669,7 +669,7 @@
         "Run 'kahi ctl status' and verify a formatted table is printed with name, state, PID, uptime, description columns",
         "Run 'kahi ctl status web' and verify detailed status for only the web process is printed",
         "Run 'kahi ctl status --json' and verify JSON output is printed for machine parsing",
-        "Verify state labels are color-coded in terminal output (green=RUNNING, red=FATAL, yellow=STARTING)",
+        "Verify output contains ANSI escape sequences \\033[32m before RUNNING, \\033[31m before FATAL, \\033[33m before STARTING state labels",
         "Verify uptime is formatted as human-readable duration (e.g., 1d 2h 30m)",
         "Verify exit status is shown for EXITED processes",
         "Run 'kahi ctl status' with no processes configured and verify an empty table with headers is printed"
@@ -813,7 +813,9 @@
       "testing_steps": [
         "Send SIGUSR2 to Kahi and verify all log file handles are closed and reopened",
         "Verify SIGUSR2 only affects file-based logs, not console or syslog destinations",
-        "Verify a file reopen failure is logged but does not crash the daemon"
+        "Verify a file reopen failure is logged but does not crash the daemon",
+        "Send SIGUSR2 when no log files are configured and verify the signal is acknowledged without error",
+        "Send SIGUSR2 during active log writing and verify no log entries are lost during rotation"
       ],
       "passes": false,
       "dependencies": ["log-reopen-sigusr2"]
@@ -976,7 +978,9 @@
       "testing_steps": [
         "Start Kahi and verify a SUPERVISOR_STATE_RUNNING event is emitted after startup completes",
         "Initiate shutdown and verify a SUPERVISOR_STATE_STOPPING event is emitted",
-        "Verify these events fire exactly once per state change and not periodically"
+        "Verify these events fire exactly once per state change and not periodically",
+        "Verify SUPERVISOR_STATE_CHANGE event includes both old_state and new_state fields",
+        "Verify no duplicate state change events are emitted for the same transition"
       ],
       "passes": false,
       "dependencies": ["event-bus"]
@@ -989,7 +993,9 @@
       "testing_steps": [
         "Add a group to active management and verify a PROCESS_GROUP_ADDED event is emitted with the group name",
         "Remove a group from active management and verify a PROCESS_GROUP_REMOVED event is emitted with the group name",
-        "Verify group events fire after the operation completes, not before"
+        "Verify group events fire after the operation completes, not before",
+        "Verify GROUP_ADDED event includes the list of process names in the group",
+        "Verify GROUP_REMOVED event is emitted when a group is removed during config reload"
       ],
       "passes": false,
       "dependencies": ["event-bus", "group-lifecycle"]
@@ -1163,7 +1169,7 @@
         "Run 'kahi daemon --daemonize' and verify it double-forks, redirects stdio to /dev/null, and writes PID file",
         "Verify the PID file contains the correct daemon PID",
         "Stop the daemon and verify the PID file is removed",
-        "Configure a non-writable PID file path and verify exit with an appropriate error",
+        "Configure a non-writable PID file path and verify exit with error message 'cannot write PID file: {path}: {error}'",
         "Start a second daemon instance with the same PID file and verify it detects the running instance and exits with error",
         "Create a stale PID file (process not running) and start the daemon and verify it is overwritten with a warning"
       ],
@@ -1209,7 +1215,7 @@
         "Configure directory='/opt/app' in daemon config and verify working directory is changed to /opt/app on startup",
         "Configure directory='/opt/app/web' in process config and verify child working directory is set correctly",
         "Configure a nonexistent directory and verify a config validation error is returned",
-        "Configure a non-accessible directory and verify an appropriate error is returned",
+        "Configure a non-accessible directory and verify error message 'cannot access directory: {path}: {error}' is returned",
         "Verify per-process directory supports variable expansion"
       ],
       "passes": false,
@@ -1291,7 +1297,9 @@
       "testing_steps": [
         "Run 'kahi migrate supervisord.conf --dry-run' and verify TOML is printed to stdout with no file written",
         "Verify dry run output includes any warnings about unsupported options",
-        "Verify dry run is the default behavior when no --output is specified"
+        "Verify dry run is the default behavior when no --output is specified",
+        "Run dry-run migration on a config with unsupported supervisord directives and verify warnings are printed for each",
+        "Run dry-run migration and verify the output is valid TOML that can be parsed without errors"
       ],
       "passes": false,
       "dependencies": ["config-migration-tool"]
@@ -1368,7 +1376,7 @@
         "Run 'kahi ctl send web quit' and verify the data is written to stdin with a trailing newline",
         "Write stdin to a non-running process and verify 'process not running' error",
         "Write stdin to a process without stdin configured and verify 'does not accept stdin' error",
-        "Write stdin to a process with a broken pipe and verify appropriate error message"
+        "Write stdin to a process with a broken pipe and verify error message 'stdin pipe broken for {name}'"
       ],
       "passes": false,
       "dependencies": ["rest-api-endpoints", "process-start"]
@@ -1379,13 +1387,13 @@
       "title": "Web UI HTML Status Page",
       "description": "HTML page showing all processes with state, PID, uptime, action buttons, and auto-refresh via JavaScript.",
       "testing_steps": [
-        "Enable Web UI and request GET / in a browser and verify an HTML page listing all processes is returned",
-        "Verify the page shows name, group, state (color-coded), PID, uptime, description for each process",
-        "Verify action buttons (Start, Stop, Restart, Clear Log, Tail Stdout, Tail Stderr) are present",
-        "Click 'Stop All' button and verify the corresponding API action is triggered",
-        "Verify the page auto-refreshes status every 5 seconds via JavaScript",
-        "Verify the page works without JavaScript (static HTML with forms as fallback)",
-        "Verify the layout is responsive and collapses for mobile screens"
+        "Send GET / and verify HTML response contains process names and action button elements",
+        "Verify the HTML response includes elements for name, group, state, PID, uptime, and description for each process",
+        "Verify HTML contains button or anchor elements for Start, Stop, Restart, Clear Log, Tail Stdout, Tail Stderr actions",
+        "Send POST to the corresponding API endpoint for Stop All and verify the action is triggered",
+        "Verify HTML response body contains SSE EventSource JavaScript",
+        "Verify GET / returns complete HTML with process data even without JavaScript execution",
+        "Verify HTML includes viewport meta tag and CSS media queries for responsive layout"
       ],
       "passes": false,
       "dependencies": ["rest-api-endpoints"]
@@ -1396,12 +1404,12 @@
       "title": "Web UI Browser-Based Log Viewer",
       "description": "Browser-based real-time log tailing for process stdout/stderr via SSE, with auto-scroll and ANSI color rendering.",
       "testing_steps": [
-        "Click 'Tail Stdout' for a process and verify real-time stdout output is streamed to the browser via SSE",
-        "Select stderr in the log viewer and verify stderr is streamed instead",
+        "Send GET to /api/v1/processes/{name}/log/stdout/stream and verify Content-Type is text/event-stream",
+        "Send GET to /api/v1/processes/{name}/log/stderr/stream and verify Content-Type is text/event-stream",
         "Verify the log viewer shows last N lines on initial load then streams new lines",
         "Write a test that simulates SSE connection drop and verify auto-reconnect behavior",
-        "Verify ANSI escape codes are rendered as colors in the browser",
-        "Verify auto-scroll to bottom with manual scroll override support",
+        "Verify HTML response includes an ANSI-to-HTML rendering library or inline style conversion",
+        "Verify SSE stream sends sequential event IDs for ordered rendering",
         "Verify a message is displayed when no log file is configured for the process"
       ],
       "passes": false,
@@ -1460,11 +1468,11 @@
       "title": "Web UI Visual Design and Responsive Layout",
       "description": "Clean, functional Web UI with distinct state colors, responsive table-to-card layout, monospace log viewer, and self-contained CSS/JS.",
       "testing_steps": [
-        "Verify process states use distinct colors: RUNNING=green, FATAL=red, STARTING/BACKOFF=yellow, STOPPED/EXITED=gray, STOPPING=orange",
-        "Verify table layout is responsive and collapses to card layout on screens narrower than 768px",
+        "Verify CSS contains color rules for .state-running, .state-stopped, .state-fatal classes",
+        "Verify HTML includes viewport meta tag and CSS media queries for max-width 768px",
         "Verify action buttons are clearly labeled and grouped logically",
-        "Verify the log viewer uses monospace font with a dark background",
-        "Verify no external CSS or JS dependencies are loaded (self-contained)"
+        "Verify CSS specifies font-family including monospace for the log viewer",
+        "Verify no external URLs in CSS or JavaScript imports"
       ],
       "passes": false,
       "dependencies": ["web-ui-status-page"]
@@ -1475,8 +1483,8 @@
       "title": "CLI Output Formatting and Color Support",
       "description": "Consistent, readable CLI output with aligned columns, color-coded states, automatic color detection, and --no-color and --json flags.",
       "testing_steps": [
-        "Run 'kahi ctl status' in a terminal and verify columns are aligned with consistent padding",
-        "Verify state labels are color-coded when stdout is a terminal (RUNNING=green, FATAL=red, etc.)",
+        "Verify output lines match a fixed-width format regex where each column occupies a defined character width",
+        "Verify output contains ANSI escape sequences: \\033[32m for RUNNING, \\033[31m for FATAL, \\033[33m for STARTING",
         "Pipe 'kahi ctl status' output to a file and verify colors are disabled automatically",
         "Run 'kahi ctl status --no-color' and verify colors are disabled explicitly",
         "Run 'kahi ctl status --json' and verify machine-readable JSON output is returned"

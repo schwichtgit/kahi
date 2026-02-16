@@ -64,7 +64,7 @@ Once established, these principles do not change without explicit human approval
 3. HTTP Basic Auth with bcrypt-hashed passwords -- no plaintext password storage in config
 4. User/group switching -- daemon can drop privileges; child processes can run as specified user
 5. No shell execution -- child processes are exec'd directly, never via sh -c, to prevent injection
-6. Environment variable sanitization -- only explicitly configured env vars are passed to child processes
+6. Environment variable sanitization -- clean_environment option controls inheritance; when enabled, only explicitly configured env vars are passed to child processes
 7. FIPS 140 compliant cryptography -- all crypto operations use Go's FIPS-validated module
 
 ## Out of Scope
