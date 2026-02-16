@@ -163,7 +163,9 @@ func TestWebhookSlackTemplate(t *testing.T) {
 	})
 
 	var body map[string]string
-	json.Unmarshal(payload, &body)
+	if err := json.Unmarshal(payload, &body); err != nil {
+		t.Fatal(err)
+	}
 	if body["text"] == "" {
 		t.Fatal("expected text field in Slack payload")
 	}
@@ -180,7 +182,9 @@ func TestWebhookPagerDutyTemplate(t *testing.T) {
 	})
 
 	var body map[string]any
-	json.Unmarshal(payload, &body)
+	if err := json.Unmarshal(payload, &body); err != nil {
+		t.Fatal(err)
+	}
 	if body["event_action"] != "trigger" {
 		t.Fatalf("expected event_action=trigger, got %v", body["event_action"])
 	}
@@ -198,7 +202,9 @@ func TestWebhookGenericTemplate(t *testing.T) {
 	})
 
 	var body map[string]any
-	json.Unmarshal(payload, &body)
+	if err := json.Unmarshal(payload, &body); err != nil {
+		t.Fatal(err)
+	}
 	if body["event"] != "PROCESS_STATE_RUNNING" {
 		t.Fatalf("expected event field, got %v", body["event"])
 	}
@@ -215,7 +221,9 @@ func TestWebhookUnknownTemplate(t *testing.T) {
 	})
 
 	var body map[string]any
-	json.Unmarshal(payload, &body)
+	if err := json.Unmarshal(payload, &body); err != nil {
+		t.Fatal(err)
+	}
 	if body["event"] != "PROCESS_STATE_RUNNING" {
 		t.Fatal("expected generic format for unknown template")
 	}
