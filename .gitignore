@@ -1,0 +1,6 @@
+# Claude Code - Allow .claude directory for hooks and settings
+!.claude/
+!.claude/**
+# But ignore Claude Mind memory files
+.claude/mind.*
+.claude/*.mv2

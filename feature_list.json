@@ -1,0 +1,1540 @@
+{
+  "features": [
+    {
+      "id": "go-module-structure",
+      "category": "infrastructure",
+      "title": "Go Module and Project Structure",
+      "description": "Initialize the Go module and establish the canonical directory layout for the Kahi project, including go.mod, cmd/kahi/main.go, and all internal packages.",
+      "testing_steps": [
+        "Verify go.mod exists with module path github.com/<org>/kahi and minimum Go version 1.26.0",
+        "Verify cmd/kahi/main.go exists and contains a main function",
+        "Verify internal/ directory contains subdirectories: config, process, supervisor, api, events, logging, ctl, migrate, fcgi",
+        "Run 'go build ./cmd/kahi' and verify it produces a binary with exit code 0",
+        "Run 'go vet ./...' and verify zero findings with exit code 0",
+        "Verify go.sum file exists after running go mod tidy",
+        "Verify the binary produced by go build is statically linked with CGO_ENABLED=0",
+        "Import each internal package in a test file and verify no compilation errors",
+        "Verify internal/version package exists for build metadata",
+        "Verify internal/testutil package exists for shared test helpers"
+      ],
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "taskfile-workflow",
+      "category": "infrastructure",
+      "title": "Taskfile Development Workflow",
+      "description": "Configure Taskfile.yml for local development tasks including build, test, lint, format, coverage, and vet targets.",
+      "testing_steps": [
+        "Verify Taskfile.yml exists in the project root directory",
+        "Run 'task build' and verify it compiles the binary to ./bin/kahi",
+        "Run 'task test' and verify it runs all tests with the -race flag",
+        "Run 'task lint' and verify it runs golangci-lint run ./...",
+        "Run 'task fmt' and verify it runs gofmt and reports changed files",
+        "Run 'task vet' and verify it runs go vet ./...",
+        "Run 'task coverage' and verify it generates coverage.out and fails below 85% threshold",
+        "Run 'task all' and verify it runs fmt, vet, lint, test, build in sequence",
+        "Run 'task clean' and verify it removes the ./bin directory",
+        "Run 'task test-integration' and verify it runs tests with the integration build tag",
+        "Run 'task test-e2e' and verify it runs tests with the e2e build tag"
+      ],
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "goreleaser-config",
+      "category": "infrastructure",
+      "title": "GoReleaser Cross-Platform Release Configuration",
+      "description": "Configure GoReleaser for cross-platform release builds targeting linux and darwin on amd64 and arm64, with FIPS support and version injection via ldflags.",
+      "testing_steps": [
+        "Verify .goreleaser.yml exists in the project root",
+        "Run 'goreleaser check' and verify the config is valid with exit code 0",
+        "Verify builds section includes targets for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64",
+        "Verify a FIPS build variant is defined with GOFIPS140=v1.0.0 environment variable",
+        "Verify all builds use CGO_ENABLED=0 for static binaries",
+        "Verify ldflags inject version, commit, and date into the binary",
+        "Verify checksum file generation is configured for all artifacts"
+      ],
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "cli-framework",
+      "category": "infrastructure",
+      "title": "CLI Framework with Cobra Subcommands",
+      "description": "Establish the CLI entry point using spf13/cobra with subcommand routing for daemon, ctl, migrate, version, init, hash-password, and completion.",
+      "testing_steps": [
+        "Run 'kahi daemon' and verify it prints a placeholder message or starts daemon mode",
+        "Run 'kahi ctl' and verify it prints a placeholder message or enters control mode",
+        "Run 'kahi migrate' and verify it prints a placeholder message or enters migrate mode",
+        "Run 'kahi version' and verify it prints version, commit hash, build date, Go version, OS/arch, and FIPS status",
+        "Run 'kahi init' and verify it prints a placeholder message or enters init mode",
+        "Run 'kahi hash-password' and verify it prints a placeholder message or enters hash-password mode",
+        "Run 'kahi completion' and verify it outputs shell completion scripts",
+        "Run 'kahi' with no arguments and verify it prints usage showing all subcommands",
+        "Run 'kahi --help' and verify it prints usage with descriptions for each subcommand",
+        "Run 'kahi nonexistent' and verify it prints an error and exits with code 1"
+      ],
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "toml-config-parser",
+      "category": "infrastructure",
+      "title": "TOML Config Parser Foundation",
+      "description": "Implement TOML config file loading, parsing into typed Go structs, and structural validation with detailed error messages including file path, line number, and field name.",
+      "testing_steps": [
+        "Parse a valid kahi.toml file and verify all fields are populated in the typed Go struct",
+        "Parse an invalid TOML file and verify structured errors include file path, line number, and field name",
+        "Verify all TOML types are supported: string, integer, float, boolean, datetime, array, table",
+        "Parse a config with missing required fields and verify a validation error is returned",
+        "Parse a config with wrong field types and verify type mismatch errors are reported",
+        "Parse a config with out-of-range values (port > 65535, priority > 999) and verify range validation errors",
+        "Parse a config with unknown fields and verify warnings are produced but parsing succeeds",
+        "Parse a config with [programs.web] section and verify it maps to the program config struct",
+        "Parse a config with [supervisor] section and verify daemon-level settings are extracted",
+        "Write a unit test that parses an empty TOML string and verifies defaults are applied"
+      ],
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "structured-logging",
+      "category": "infrastructure",
+      "title": "Structured Logging Foundation with slog",
+      "description": "Establish the logging subsystem using Go stdlib slog package with JSON and text output formats, configurable levels, and context-aware child loggers.",
+      "testing_steps": [
+        "Verify default output is structured JSON to stdout with timestamp, level, message, and fields",
+        "Configure log_format=text and verify output is human-readable text format",
+        "Configure each log level (debug, info, warn, error) and verify correct filtering",
+        "Verify each log entry includes RFC3339 timestamp, level, message, and structured fields",
+        "Create a child logger with additional context fields (e.g., process=foo) and verify fields appear in output",
+        "Verify no third-party logging library is imported; only stdlib slog is used",
+        "Write a unit test that captures log output and asserts JSON structure"
+      ],
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "process-state-machine",
+      "category": "functional",
+      "title": "Process State Machine with Enforced Transitions",
+      "description": "Implement the process state machine with states STOPPED, STARTING, RUNNING, BACKOFF, STOPPING, EXITED, FATAL and enforced valid transitions between them.",
+      "testing_steps": [
+        "Write a unit test that creates a process in STOPPED state, calls Start(), and asserts state transitions to STARTING",
+        "Write a unit test that verifies STARTING transitions to RUNNING after startsecs seconds elapse",
+        "Write a unit test that verifies STARTING transitions to BACKOFF when the process exits before startsecs",
+        "Write a unit test that verifies BACKOFF transitions to STARTING when backoff delay expires with retries remaining",
+        "Write a unit test that verifies BACKOFF transitions to FATAL when retry limit is reached",
+        "Write a unit test that verifies RUNNING transitions to STOPPING on stop command",
+        "Write a unit test that verifies STOPPING transitions to STOPPED when process exits",
+        "Write a unit test that verifies RUNNING transitions to EXITED when process exits on its own",
+        "Write a unit test that attempts an invalid transition (e.g., STOPPED to RUNNING) and verifies it is rejected with an error message",
+        "Write a unit test that verifies the backoff retry counter resets when process reaches RUNNING state",
+        "Verify transition from STOPPING to EXITED works even if stop signal was not the cause of exit",
+        "Write a unit test using a mock Clock to verify clock rollback during STARTING does not cause premature RUNNING transition"
+      ],
+      "passes": false,
+      "dependencies": ["go-module-structure"]
+    },
+    {
+      "id": "process-start",
+      "category": "functional",
+      "title": "Process Start with Isolation and Environment",
+      "description": "Start a child process with direct exec (no shell), stdout/stderr pipe capture, process group isolation via setpgid, and configurable environment variable inheritance modes.",
+      "testing_steps": [
+        "Write a unit test using a mock ProcessSpawner that verifies the child is exec'd directly without a shell",
+        "Write a unit test that verifies stdout and stderr pipes are created for the child process",
+        "Write a unit test that verifies setpgid is called to give the child its own process group",
+        "Write a unit test that verifies SUPERVISOR_ENABLED=1, SUPERVISOR_PROCESS_NAME, and SUPERVISOR_GROUP_NAME are set in the child environment",
+        "Write a unit test with clean_environment=true that verifies only Kahi vars and explicitly configured environment vars are present",
+        "Write a unit test with clean_environment=false that verifies all parent environment variables are inherited",
+        "Write a unit test with autostart=true that verifies the process is started automatically on daemon startup",
+        "Write a unit test with autostart=false that verifies the process remains in STOPPED state on daemon startup",
+        "Write a unit test with directory config that verifies the child working directory is set correctly",
+        "Write a unit test that verifies a missing command binary results in FATAL state with spawn error",
+        "Write a unit test that verifies a non-executable command results in FATAL state with permission denied error",
+        "Write a unit test that attempts to start an already-running process and verifies the error message"
+      ],
+      "passes": false,
+      "dependencies": ["process-state-machine", "structured-logging"]
+    },
+    {
+      "id": "process-stop",
+      "category": "functional",
+      "title": "Process Stop with Signal Escalation",
+      "description": "Stop a running process by sending the configured stop signal, waiting for stopwaitsecs, and escalating to SIGKILL if the process does not exit.",
+      "testing_steps": [
+        "Write a unit test that sends SIGTERM to a RUNNING process and verifies transition to STOPPING state",
+        "Write a unit test that verifies SIGKILL is sent after stopwaitsecs expires without process exit",
+        "Write a unit test with stopasgroup=true that verifies the signal is sent to the process group (-pid)",
+        "Write a unit test with killasgroup=true that verifies SIGKILL is sent to the process group on escalation",
+        "Write a unit test that verifies a process exiting before stopwaitsecs transitions to STOPPED without SIGKILL",
+        "Write a unit test that stops a non-running process and verifies the error message 'process not running'",
+        "Write a unit test that verifies multiple stop commands on the same process are idempotent",
+        "Write a unit test with stopwaitsecs=0 that verifies SIGKILL is sent immediately after the stop signal",
+        "Write a unit test that verifies killasgroup=false with stopasgroup=true is rejected at config validation",
+        "Write a unit test that verifies a process exiting during signal send does not cause errors"
+      ],
+      "passes": false,
+      "dependencies": ["process-state-machine", "process-start"]
+    },
+    {
+      "id": "autorestart",
+      "category": "functional",
+      "title": "Automatic Process Restart on Exit",
+      "description": "Automatically restart processes based on exit behavior using autorestart modes: true (always), false (never), and unexpected (restart only on unexpected exit codes).",
+      "testing_steps": [
+        "Write a unit test with autorestart=true that verifies the process is restarted after exiting with any exit code",
+        "Write a unit test with autorestart=unexpected and exitcodes=[0] that verifies restart on exit code 1",
+        "Write a unit test with autorestart=unexpected and exitcodes=[0] that verifies no restart on exit code 0",
+        "Write a unit test with autorestart=false that verifies the process is not restarted after exit",
+        "Write a unit test that verifies autorestart only applies after process has reached RUNNING state",
+        "Write a unit test that verifies a manually stopped process is never autorestarted regardless of setting",
+        "Write a unit test that verifies autorestart is suppressed during daemon shutdown",
+        "Parse a config with an invalid autorestart value and verify a validation error is returned",
+        "Write a unit test with autorestart=unexpected and exitcodes=[0,2] that verifies exit code 2 is treated as expected and does not trigger restart",
+        "Write a unit test that verifies autorestart does not apply during STARTING/BACKOFF phases before RUNNING is reached"
+      ],
+      "passes": false,
+      "dependencies": ["process-state-machine", "process-start"]
+    },
+    {
+      "id": "backoff-retries",
+      "category": "functional",
+      "title": "Exponential Backoff with Configurable Retries",
+      "description": "Implement exponential backoff for processes that fail to start, with configurable retry limits and increasing delays between attempts.",
+      "testing_steps": [
+        "Write a unit test with startsecs=1 and startretries=3 that verifies backoff delays increase as 1s, 2s, 4s",
+        "Write a unit test that verifies the process transitions to FATAL after startretries failures",
+        "Write a unit test that verifies the backoff counter resets when a process reaches RUNNING state",
+        "Write a unit test with startretries=0 that verifies the process goes directly to FATAL on first failed start",
+        "Write a unit test that verifies backoff delay is capped at a maximum of 60 seconds",
+        "Write a unit test using a mock Clock that verifies system clock rollback does not cause negative waits"
+      ],
+      "passes": false,
+      "dependencies": ["process-state-machine", "process-start"]
+    },
+    {
+      "id": "process-reaping",
+      "category": "functional",
+      "title": "Child Process Reaping via SIGCHLD",
+      "description": "Reap child processes on SIGCHLD, collect exit status via waitpid, and trigger process state machine transitions. Handle coalesced SIGCHLD by draining all exited children in a loop.",
+      "testing_steps": [
+        "Write a unit test that verifies waitpid collects exit status when a managed child exits",
+        "Write a unit test that verifies the process state machine is updated after reaping",
+        "Write a unit test that simulates multiple children exiting simultaneously and verifies all are reaped in a single SIGCHLD handler loop",
+        "Write a unit test that verifies an unknown PID from waitpid is logged as a warning and ignored",
+        "Write a unit test that verifies the reaping loop stops when waitpid returns ECHILD",
+        "Write a unit test that verifies exit status includes both normal exit codes and signal-killed status"
+      ],
+      "passes": false,
+      "dependencies": ["process-start"]
+    },
+    {
+      "id": "numprocs-instances",
+      "category": "functional",
+      "title": "Multiple Process Instances via numprocs",
+      "description": "Launch multiple instances of a process from a single program definition using numprocs count and template variable expansion for process naming.",
+      "testing_steps": [
+        "Parse a TOML config with numprocs=3 and process_name='worker-%(process_num)d' and verify 3 process configs are generated with names worker-0, worker-1, worker-2",
+        "Parse a TOML config with numprocs=3 and numprocs_start=10 and verify process names are worker-10, worker-11, worker-12",
+        "Parse a config with numprocs > 1 and no %(process_num) in process_name and verify config validation fails",
+        "Parse a config with numprocs < 1 and verify config validation returns an error",
+        "Parse a config that would produce duplicate process names after expansion and verify validation catches it",
+        "Verify numprocs=1 with no template variable in process_name is accepted as valid",
+        "Verify template variables %(process_num)d, %(program_name)s, %(group_name)s, %(numprocs)d are all expanded",
+        "Write a unit test that verifies individual instances can be started and stopped independently",
+        "Write a unit test that starts all instances and verifies each has a unique PID and unique name",
+        "Write a unit test with numprocs=5 and verify all 5 processes are created with sequential numbering"
+      ],
+      "passes": false,
+      "dependencies": ["process-start"]
+    },
+    {
+      "id": "priority-ordering",
+      "category": "functional",
+      "title": "Priority-Based Start and Stop Ordering",
+      "description": "Start processes in ascending priority order and stop in descending priority order, with lexicographic name ordering as tiebreaker for equal priorities.",
+      "testing_steps": [
+        "Write a unit test with processes at priorities 100, 200, 300 that verifies start order is 100, 200, 300",
+        "Write a unit test with processes at priorities 100, 200, 300 that verifies stop order is 300, 200, 100",
+        "Write a unit test with processes at the same priority that verifies lexicographic name ordering",
+        "Parse a config with priority outside 0-999 and verify a config validation error is returned",
+        "Write a unit test that verifies priority ordering applies to group-level operations",
+        "Write a unit test that verifies shutdown uses the same reverse-priority ordering"
+      ],
+      "passes": false,
+      "dependencies": ["process-start"]
+    },
+    {
+      "id": "homogeneous-groups",
+      "category": "functional",
+      "title": "Implicit Homogeneous Process Groups",
+      "description": "Each program definition implicitly creates a group with the same name containing all its numprocs instances.",
+      "testing_steps": [
+        "Parse a [programs.web] section with numprocs=2 and verify a group named 'web' exists containing web-0 and web-1",
+        "Write a unit test that issues 'start web:*' and verifies all processes in the web group are started",
+        "Write a unit test that references a nonexistent group and verifies the error 'no such group'",
+        "Verify a program with numprocs=1 creates a group with a single process",
+        "Verify group name collisions between programs are caught at config validation time"
+      ],
+      "passes": false,
+      "dependencies": ["numprocs-instances"]
+    },
+    {
+      "id": "heterogeneous-groups",
+      "category": "functional",
+      "title": "Explicit Heterogeneous Process Groups",
+      "description": "Define explicit groups in config that combine processes from multiple program definitions under one group name, with validation for program references.",
+      "testing_steps": [
+        "Parse a [groups.services] section with programs=['web','api'] and verify the group contains processes from both",
+        "Write a unit test that issues a group start operation and verifies it applies to all member processes respecting priority ordering",
+        "Parse a config where a group references a nonexistent program and verify a validation error is returned",
+        "Parse a config where a program is in two explicit groups and verify a validation error is returned",
+        "Verify that when a heterogeneous group exists, implicit homogeneous groups for member programs are suppressed",
+        "Parse a config with an empty group (no programs) and verify it is rejected at config validation"
+      ],
+      "passes": false,
+      "dependencies": ["homogeneous-groups"]
+    },
+    {
+      "id": "group-lifecycle",
+      "category": "functional",
+      "title": "Runtime Group Add and Remove",
+      "description": "Add and remove process groups at runtime via API/CLI, including adding new groups from reloaded config and removing inactive groups.",
+      "testing_steps": [
+        "Write a unit test that adds a new program to config, reloads, and verifies the new group is added with autostart processes running",
+        "Write a unit test that removes a group with all processes STOPPED and verifies the group is removed from active management",
+        "Write a unit test that attempts to remove a group with running processes and verifies the error message",
+        "Write a unit test that attempts to add an already-active group and verifies the error message",
+        "Write a unit test that attempts to remove a nonexistent group and verifies the error message",
+        "Write a unit test that removes then re-adds a group and verifies config is re-read"
+      ],
+      "passes": false,
+      "dependencies": ["homogeneous-groups", "heterogeneous-groups"]
+    },
+    {
+      "id": "toml-variable-expansion",
+      "category": "functional",
+      "title": "TOML Config Variable Expansion",
+      "description": "Expand template variables and environment variable references in config values, supporting %(here)s, %(program_name)s, %(process_num)d, and ${ENV_VAR} syntax.",
+      "testing_steps": [
+        "Parse a config with directory='%(here)s/data' loaded from /etc/kahi/kahi.toml and verify it resolves to /etc/kahi/data",
+        "Parse a config with command='${APP_BIN}/server' where APP_BIN=/usr/local/bin and verify resolution to /usr/local/bin/server",
+        "Parse a config with stdout_logfile containing %(program_name)s and %(process_num)d and verify correct expansion",
+        "Parse a config referencing an undefined environment variable and verify a config error is returned",
+        "Parse a config referencing an unknown template variable and verify a config error is returned",
+        "Verify that recursive expansion is not supported (variable referencing another variable stays literal)",
+        "Verify that literal % can be escaped as %% and literal $ as $$",
+        "Verify that expansion happens at config load time, not at process start time",
+        "Parse a config with %(group_name)s in a process environment value and verify it resolves to the group name",
+        "Parse a config with multiple variable references in a single value and verify all are expanded correctly"
+      ],
+      "passes": false,
+      "dependencies": ["toml-config-parser"]
+    },
+    {
+      "id": "config-include-system",
+      "category": "functional",
+      "title": "Config File Include System with Glob Patterns",
+      "description": "Include additional TOML config files via glob patterns, merged alphabetically, with validation for circular includes and duplicate program names.",
+      "testing_steps": [
+        "Create a main config with include=['conf.d/*.toml'], add matching files, and verify they are parsed and merged alphabetically",
+        "Create a main config with an include pattern matching no files and verify a warning is logged but loading continues",
+        "Create a main config with relative include paths and verify they resolve relative to the main config directory",
+        "Create an included file with a syntax error and verify config load fails with the correct file name in the error",
+        "Create a circular include and verify it is detected and config load fails",
+        "Create two included files defining the same program name and verify a validation error about duplicate names",
+        "Verify included files can define programs but cannot override [supervisor] settings"
+      ],
+      "passes": false,
+      "dependencies": ["toml-config-parser", "toml-variable-expansion"]
+    },
+    {
+      "id": "config-hot-reload",
+      "category": "functional",
+      "title": "Config Hot Reload on SIGHUP",
+      "description": "Re-read config on SIGHUP, compute a diff against the running state, and apply changes: add new programs, remove deleted programs, restart changed programs.",
+      "testing_steps": [
+        "Write a test that sends SIGHUP to a running daemon and verifies config is re-read and a diff is computed",
+        "Write a test that adds a new program to config, reloads, and verifies the new group starts with autostart processes",
+        "Write a test that removes a program from config, reloads and applies, and verifies processes are stopped and group removed",
+        "Write a test that changes a program config, reloads and applies, and verifies processes are stopped, config updated, and processes restarted",
+        "Write a test where the reloaded config has a syntax error and verify the reload is rejected with existing config retained",
+        "Write a test where the reloaded config has a validation error and verify the reload is rejected",
+        "Verify unchanged programs keep running and are not restarted during reload",
+        "Verify reload during shutdown is ignored",
+        "Verify concurrent reload requests are serialized",
+        "Write a test that changes numprocs from 2 to 4 and verifies 2 new process instances are added on reload"
+      ],
+      "passes": false,
+      "dependencies": ["toml-variable-expansion", "config-include-system", "group-lifecycle"]
+    },
+    {
+      "id": "config-search-paths",
+      "category": "functional",
+      "title": "Config File Search Path Resolution",
+      "description": "Search predefined paths for the config file when not explicitly specified via -c flag, with support for KAHI_CONFIG environment variable override.",
+      "testing_steps": [
+        "Write a test that starts Kahi without -c flag and verifies it searches ./kahi.toml, /etc/kahi/kahi.toml, /etc/kahi.toml in order",
+        "Write a test that starts Kahi with -c /path/to/config.toml and verifies only the specified path is used",
+        "Write a test with no config found in any search path and verify exit with code 1 and descriptive error",
+        "Write a test with KAHI_CONFIG env var set and verify it takes precedence over search paths",
+        "Write a test with a non-readable config file and verify exit with an appropriate permission error"
+      ],
+      "passes": false,
+      "dependencies": ["toml-config-parser"]
+    },
+    {
+      "id": "default-config-generation",
+      "category": "functional",
+      "title": "Default Config Generation via kahi init",
+      "description": "Generate a complete, commented sample kahi.toml with annotated defaults that is valid for starting Kahi with no programs defined.",
+      "testing_steps": [
+        "Run 'kahi init' and verify a complete, commented sample config is printed to stdout",
+        "Run 'kahi init --output /tmp/test-kahi.toml' and verify the config is written to the file",
+        "Parse the generated config with the TOML parser and verify it is valid",
+        "Start Kahi with the generated config and verify it starts with no programs defined",
+        "Run 'kahi init --output' targeting an existing file and verify it refuses with a message about --force",
+        "Run 'kahi init --output --force' targeting an existing file and verify it overwrites",
+        "Verify the generated config includes commented-out sections for all configurable options"
+      ],
+      "passes": false,
+      "dependencies": ["toml-config-parser"]
+    },
+    {
+      "id": "daemon-log",
+      "category": "functional",
+      "title": "Daemon Log Output Configuration",
+      "description": "Configure the Kahi daemon's own log output format, level, and optional file destination, using slog handlers.",
+      "testing_steps": [
+        "Start Kahi with default config and verify daemon logs are JSON format on stdout",
+        "Configure log_format='text' and verify daemon logs use human-readable text format",
+        "Configure log_level='debug' and verify debug-level messages appear in output",
+        "Configure logfile='/tmp/kahi-test.log' and verify daemon logs are written to the specified file",
+        "Configure an invalid log level and verify a config validation error is returned",
+        "Configure a non-writable logfile path and verify Kahi exits with an appropriate error",
+        "Verify log file is opened in append mode",
+        "Change log level on config reload and verify the new level takes effect immediately"
+      ],
+      "passes": false,
+      "dependencies": ["structured-logging"]
+    },
+    {
+      "id": "process-output-capture",
+      "category": "functional",
+      "title": "Process stdout/stderr Pipe Capture",
+      "description": "Capture child process stdout and stderr via pipes and route output to configured destinations: container stdout as JSON lines, or specified log files.",
+      "testing_steps": [
+        "Write a test that starts a process with default config and verifies stdout output is forwarded as JSON lines with time, process, stream, and log fields",
+        "Write a test with stdout_logfile configured and verify output is written to the specified file",
+        "Write a test with redirect_stderr=true and verify stderr output is merged into the stdout stream",
+        "Write a test that verifies a non-writable log file path causes the process to go to FATAL",
+        "Write a test that verifies output is line-buffered when forwarding to container stdout",
+        "Write a test that verifies pipe is closed on process exit and remaining buffered data is flushed",
+        "Write a test that verifies large output bursts do not block the child process"
+      ],
+      "passes": false,
+      "dependencies": ["process-start", "structured-logging"]
+    },
+    {
+      "id": "log-rotation",
+      "category": "functional",
+      "title": "Log File Size-Based Rotation",
+      "description": "Rotate process log files based on configurable maximum file size, with numbered backup files and configurable backup count.",
+      "testing_steps": [
+        "Write a test with stdout_logfile_maxbytes=50MB and stdout_logfile_backups=10 that verifies rotation creates .1, .2, up to .10 backup files",
+        "Write a test with stdout_logfile_backups=0 that verifies the file is truncated when maxbytes is exceeded",
+        "Write a test with stdout_logfile_maxbytes=0 that verifies the log file grows without bound",
+        "Write a test that verifies rotation uses rename (atomic) and not copy+truncate",
+        "Write a test that verifies byte size parsing supports B, KB, MB, GB suffixes",
+        "Write a test that simulates a rotation rename failure and verifies the daemon continues writing to the current file"
+      ],
+      "passes": false,
+      "dependencies": ["process-output-capture"]
+    },
+    {
+      "id": "syslog-forwarding",
+      "category": "functional",
+      "title": "Optional Syslog Output Forwarding",
+      "description": "Optionally forward process stdout/stderr to syslog with configurable facility and priority, alongside other log destinations.",
+      "testing_steps": [
+        "Write a test with stdout_syslog=true that verifies each stdout line is sent to syslog with the process name as tag",
+        "Write a test that verifies multi-line output is sent as separate syslog messages",
+        "Write a test that simulates a syslog connection failure and verifies the daemon logs an error and continues without syslog",
+        "Verify syslog forwarding works alongside file logging and console passthrough",
+        "Verify syslog facility and priority are configurable with defaults of LOCAL0 and INFO"
+      ],
+      "passes": false,
+      "dependencies": ["process-output-capture"]
+    },
+    {
+      "id": "ansi-escape-stripping",
+      "category": "functional",
+      "title": "ANSI Escape Sequence Stripping",
+      "description": "Optionally remove ANSI escape sequences from process output before logging, handling all CSI sequences including colors and cursor movement.",
+      "testing_steps": [
+        "Write a test with strip_ansi=true that verifies '\\033[31mERROR\\033[0m: failed' is logged as 'ERROR: failed'",
+        "Write a test with strip_ansi=false (default) that verifies ANSI sequences are preserved in log output",
+        "Write a test that verifies all CSI sequences (colors, cursor movement, etc.) are stripped",
+        "Write a test that verifies partial escape sequences at buffer boundaries are handled correctly"
+      ],
+      "passes": false,
+      "dependencies": ["process-output-capture"]
+    },
+    {
+      "id": "log-reopen-sigusr2",
+      "category": "functional",
+      "title": "Log File Reopen on SIGUSR2",
+      "description": "Reopen all log file handles on SIGUSR2 signal to support external log rotation tools like logrotate.",
+      "testing_steps": [
+        "Write a test that sends SIGUSR2 while Kahi is writing to log files and verifies all file handles are closed and reopened",
+        "Write a test that verifies syslog connections are not affected by SIGUSR2",
+        "Write a test that simulates a file reopen failure and verifies the daemon logs an error and continues",
+        "Write a test that verifies log reopen is safe to call concurrently with log writes",
+        "Write a test that verifies SIGUSR2 during shutdown is ignored"
+      ],
+      "passes": false,
+      "dependencies": ["process-output-capture"]
+    },
+    {
+      "id": "log-cleanup-startup",
+      "category": "functional",
+      "title": "Stale Log File Cleanup on Startup",
+      "description": "Remove stale auto-generated child log files from previous runs on daemon startup, with nocleanup option to preserve existing files.",
+      "testing_steps": [
+        "Write a test that creates stale auto-generated log files and starts Kahi with nocleanup=false and verifies they are removed",
+        "Write a test that starts Kahi with nocleanup=true and verifies existing log files are preserved",
+        "Write a test that verifies only auto-generated naming pattern files are cleaned; user-specified log files are never touched",
+        "Write a test that simulates a delete failure and verifies a warning is logged and startup continues",
+        "Write a test that verifies cleanup happens before any processes are started"
+      ],
+      "passes": false,
+      "dependencies": ["process-output-capture"]
+    },
+    {
+      "id": "unix-socket-server",
+      "category": "functional",
+      "title": "Unix Domain Socket API Server",
+      "description": "Serve the control API over a Unix domain socket with configurable path, permissions, and stale socket cleanup.",
+      "testing_steps": [
+        "Start Kahi and verify a Unix socket is created at the configured path",
+        "Configure socket_chmod='0770' and verify the socket file has permissions 0770",
+        "Create a stale socket file from a simulated previous crashed run, start Kahi, and verify it is replaced",
+        "Write a test that verifies the socket is cleaned up on graceful shutdown",
+        "Write a test with a non-writable socket path and verify Kahi exits with an appropriate error",
+        "Write a test with a socket path longer than 108 characters and verify exit with 'socket path too long' error",
+        "Write a test that verifies chown on the socket when running as root",
+        "Write a test that verifies a warning is logged and chown is skipped when running as non-root",
+        "Write a test that connects to the Unix socket and makes an API request and verifies a valid JSON response",
+        "Write a test that verifies the socket is not cleaned up on SIGKILL and stale detection handles it on next start"
+      ],
+      "passes": false,
+      "dependencies": ["cli-framework"]
+    },
+    {
+      "id": "tcp-http-server",
+      "category": "functional",
+      "title": "TCP HTTP API Server",
+      "description": "Optionally serve the API over TCP with HTTP, requiring authentication for all requests.",
+      "testing_steps": [
+        "Configure [server.http] enabled=true and listen='127.0.0.1:9876' and verify an HTTP server listens on that address",
+        "Make a request to the TCP server without auth and verify 401 Unauthorized is returned",
+        "Configure auth and make a request with valid Basic Auth credentials and verify the request is processed",
+        "Write a test that attempts to bind to an already-used port and verifies exit with appropriate error",
+        "Parse a config with an invalid listen address and verify a validation error is returned",
+        "Configure listen='0.0.0.0:9876' and verify a security warning is logged"
+      ],
+      "passes": false,
+      "dependencies": ["unix-socket-server"]
+    },
+    {
+      "id": "rest-api-endpoints",
+      "category": "functional",
+      "title": "REST JSON API Endpoints",
+      "description": "JSON API for process management with endpoints for listing, starting, stopping, restarting, signaling processes, reading logs, config operations, and shutdown.",
+      "testing_steps": [
+        "Make a GET request to /api/v1/processes and verify a JSON array of process info objects is returned",
+        "Make a POST request to /api/v1/processes/web/start and verify the process is started with 200 response",
+        "Make a POST request to /api/v1/processes/web/stop and verify the process is stopped with 200 response",
+        "Make a POST request to /api/v1/processes/web/restart and verify the process is restarted",
+        "Make a POST request to /api/v1/processes/web/signal with body {\"signal\":\"HUP\"} and verify SIGHUP is sent",
+        "Make a GET request to /api/v1/processes/web/log/stdout and verify log content is returned",
+        "Make a POST request to /api/v1/config/reload and verify config is re-read and diff is returned",
+        "Make a POST request to /api/v1/shutdown and verify graceful shutdown is initiated",
+        "Make a GET request to /api/v1/config and verify all process config info is returned",
+        "Make a GET request for a nonexistent process and verify 404 with JSON error body",
+        "Make a POST request with an invalid signal name and verify 400 with JSON error body",
+        "Verify all endpoints return Content-Type: application/json header",
+        "Make a request using an unsupported HTTP method and verify 405 is returned"
+      ],
+      "passes": false,
+      "dependencies": ["unix-socket-server", "tcp-http-server", "process-state-machine"]
+    },
+    {
+      "id": "sse-streaming",
+      "category": "functional",
+      "title": "Server-Sent Events for Log and Event Streaming",
+      "description": "Stream real-time log output and events via SSE, with support for event type filtering, client disconnection cleanup, and nginx compatibility headers.",
+      "testing_steps": [
+        "Make a GET request to /api/v1/processes/web/log/stdout/stream with Accept: text/event-stream and verify new lines are streamed as SSE events",
+        "Make a GET request to /api/v1/events/stream?types=process_state,process_exit and verify only matching events are streamed",
+        "Write a test that disconnects an SSE client and verifies the server cleans up the subscription without resource leaks",
+        "Write a test that requests SSE for a nonexistent process and verifies 404 before stream starts",
+        "Verify SSE responses include X-Accel-Buffering: no header for nginx compatibility",
+        "Verify SSE uses id field with byte offset for log streams to support resume on reconnection",
+        "Verify multiple clients can stream the same log simultaneously",
+        "Verify SSE streams from the in-memory ring buffer when no log file is configured",
+        "Make a GET request to /api/v1/processes/web/log/stderr/stream and verify stderr output is streamed as SSE events",
+        "Write a test that opens an SSE stream, sends data to the process, and verifies the data appears within 100ms latency"
+      ],
+      "passes": false,
+      "dependencies": ["rest-api-endpoints"]
+    },
+    {
+      "id": "http-basic-auth",
+      "category": "functional",
+      "title": "HTTP Basic Auth with bcrypt Passwords",
+      "description": "Authenticate API requests using HTTP Basic Authentication with bcrypt-hashed passwords stored in config, required for TCP but optional for Unix socket.",
+      "testing_steps": [
+        "Configure username and bcrypt-hashed password and verify requests with matching Basic Auth are processed",
+        "Make a request without credentials and verify 401 Unauthorized with WWW-Authenticate: Basic header",
+        "Make a request with wrong credentials and verify 401 Unauthorized",
+        "Parse a config with a plaintext password and verify a validation error about bcrypt hashing",
+        "Verify auth is required for the TCP server but optional for the Unix socket",
+        "Verify kahi ctl sends credentials from config or command-line flags"
+      ],
+      "passes": false,
+      "dependencies": ["tcp-http-server"]
+    },
+    {
+      "id": "health-check-endpoint",
+      "category": "functional",
+      "title": "Liveness Probe /healthz Endpoint",
+      "description": "Liveness probe endpoint returning daemon health status, accessible without authentication.",
+      "testing_steps": [
+        "Make a GET request to /healthz while Kahi is running and verify 200 with {\"status\":\"ok\"}",
+        "Initiate shutdown and make a GET request to /healthz and verify 503 with {\"status\":\"shutting_down\"}",
+        "Verify /healthz does not require authentication",
+        "Verify /healthz response contains no process-level information"
+      ],
+      "passes": false,
+      "dependencies": ["unix-socket-server"]
+    },
+    {
+      "id": "readiness-check-endpoint",
+      "category": "functional",
+      "title": "Readiness Probe /readyz Endpoint",
+      "description": "Readiness probe endpoint reporting whether managed processes have stabilized, with optional process filter parameter.",
+      "testing_steps": [
+        "Start all autostart processes, wait for RUNNING state, and verify GET /readyz returns 200 with {\"status\":\"ready\"}",
+        "Start processes and query /readyz before they reach RUNNING and verify 503 with {\"status\":\"not_ready\"} listing pending processes",
+        "Make a GET request to /readyz?process=web,api with both RUNNING and verify 200",
+        "Make a GET request to /readyz?process=web,api with api STOPPED and verify 503 with failing list",
+        "Make a GET request to /readyz?process=unknown and verify 400 with error about unknown process",
+        "Verify /readyz does not require authentication",
+        "Verify processes with autostart=false are excluded from default readiness check",
+        "Verify FATAL processes count as stabilized in the readiness check"
+      ],
+      "passes": false,
+      "dependencies": ["health-check-endpoint"]
+    },
+    {
+      "id": "cli-process-control",
+      "category": "functional",
+      "title": "CLI Process Control Commands",
+      "description": "CLI subcommands for starting, stopping, restarting, and signaling processes via kahi ctl, supporting individual processes, groups, and the all keyword.",
+      "testing_steps": [
+        "Run 'kahi ctl start web' with web stopped and verify the process is started and status is printed",
+        "Run 'kahi ctl stop web' with web running and verify the process is stopped and status is printed",
+        "Run 'kahi ctl restart all' and verify all processes are restarted",
+        "Run 'kahi ctl signal HUP web' with web running and verify SIGHUP is sent",
+        "Run 'kahi ctl start web:*' and verify all processes in the web group are started",
+        "Run 'kahi ctl start web api worker' and verify multiple processes are started",
+        "Run 'kahi ctl' when daemon is not running and verify exit code 1 with connection error",
+        "Run 'kahi ctl start nonexistent' and verify exit code 1 with 'no such process' message",
+        "Run 'kahi ctl signal INVALID web' and verify exit code 1 with 'invalid signal' message",
+        "Run 'kahi ctl stop web:*' and verify all processes in the web group are stopped"
+      ],
+      "passes": false,
+      "dependencies": ["rest-api-endpoints", "cli-framework"]
+    },
+    {
+      "id": "cli-status-display",
+      "category": "functional",
+      "title": "CLI Status Table Display",
+      "description": "Show formatted process status table with name, state, PID, uptime, and description, supporting color-coded states and JSON output mode.",
+      "testing_steps": [
+        "Run 'kahi ctl status' and verify a formatted table is printed with name, state, PID, uptime, description columns",
+        "Run 'kahi ctl status web' and verify detailed status for only the web process is printed",
+        "Run 'kahi ctl status --json' and verify JSON output is printed for machine parsing",
+        "Verify state labels are color-coded in terminal output (green=RUNNING, red=FATAL, yellow=STARTING)",
+        "Verify uptime is formatted as human-readable duration (e.g., 1d 2h 30m)",
+        "Verify exit status is shown for EXITED processes",
+        "Run 'kahi ctl status' with no processes configured and verify an empty table with headers is printed"
+      ],
+      "passes": false,
+      "dependencies": ["cli-process-control"]
+    },
+    {
+      "id": "cli-log-tailing",
+      "category": "functional",
+      "title": "CLI Log Tailing with Follow Mode",
+      "description": "Tail process stdout/stderr logs from the CLI, supporting static tail, follow mode via SSE, and configurable byte count.",
+      "testing_steps": [
+        "Run 'kahi ctl tail web' and verify the last 1600 bytes of stdout are printed",
+        "Run 'kahi ctl tail -f web' and verify new output is streamed in real time",
+        "Run 'kahi ctl tail web stderr' and verify stderr log is tailed",
+        "Run 'kahi ctl tail nonexistent' and verify 'no such process' error",
+        "Run 'kahi ctl tail -f web' and press Ctrl+C and verify the stream terminates cleanly",
+        "Run 'kahi ctl tail --bytes 500 web' and verify the byte count is honored",
+        "Verify tail reads from the ring buffer when no log file is configured"
+      ],
+      "passes": false,
+      "dependencies": ["sse-streaming", "cli-process-control"]
+    },
+    {
+      "id": "cli-foreground-attach",
+      "category": "functional",
+      "title": "CLI Foreground Attach to Process",
+      "description": "Attach to a running process's stdin/stdout/stderr for interactive control, with terminal raw mode management.",
+      "testing_steps": [
+        "Run 'kahi ctl fg web' with web running and verify stdin is connected and stdout/stderr are streamed",
+        "Press Ctrl+C during fg session and verify the session ends but the process continues running",
+        "Run 'kahi ctl fg' for a non-running process and verify 'process not running' error",
+        "Run 'kahi ctl fg' for a process without stdin and verify 'does not accept stdin' error",
+        "Verify terminal raw mode is set during fg session and restored on exit",
+        "Write a test that attempts two fg sessions on the same process and verifies the second is rejected"
+      ],
+      "passes": false,
+      "dependencies": ["cli-process-control"]
+    },
+    {
+      "id": "cli-config-operations",
+      "category": "functional",
+      "title": "CLI Config Reread, Update, Add, and Remove",
+      "description": "CLI subcommands for config management: reread (preview changes), update (apply changes), add/remove groups.",
+      "testing_steps": [
+        "Run 'kahi ctl reread' after config change and verify it prints added/changed/removed programs without applying",
+        "Run 'kahi ctl update' after config change and verify changes are applied: removed stopped, changed restarted, new added",
+        "Run 'kahi ctl update web' and verify only the web group is updated",
+        "Run 'kahi ctl add web' for an inactive but configured program and verify it is added to active management",
+        "Run 'kahi ctl remove web' for a stopped group and verify it is removed from active management",
+        "Run 'kahi ctl reread' with an invalid config file and verify an error message is displayed",
+        "Run 'kahi ctl avail' and verify all configured programs are shown with active/available status"
+      ],
+      "passes": false,
+      "dependencies": ["cli-process-control", "config-hot-reload"]
+    },
+    {
+      "id": "cli-daemon-operations",
+      "category": "functional",
+      "title": "CLI Daemon Shutdown, Reload, Version, and PID",
+      "description": "CLI subcommands for daemon-level operations: shutdown, reload, version query, and PID query.",
+      "testing_steps": [
+        "Run 'kahi ctl shutdown' and verify graceful shutdown is initiated and the CLI waits for completion",
+        "Run 'kahi ctl reload' and verify config reload is triggered",
+        "Run 'kahi ctl version' and verify the remote daemon version is printed",
+        "Run 'kahi ctl pid' and verify the daemon PID is printed",
+        "Run 'kahi ctl pid web' with web running and verify the web process PID is printed",
+        "Run 'kahi ctl pid all' and verify PIDs for all running processes are printed",
+        "Run 'kahi ctl shutdown' when daemon is not running and verify exit code 1 with connection error"
+      ],
+      "passes": false,
+      "dependencies": ["cli-process-control"]
+    },
+    {
+      "id": "cli-tab-completion",
+      "category": "functional",
+      "title": "Shell Tab Completion for Bash and Zsh",
+      "description": "Generate shell completion scripts for bash and zsh with dynamic process name and command completion.",
+      "testing_steps": [
+        "Run 'kahi completion bash' and verify valid bash completion script is output",
+        "Run 'kahi completion zsh' and verify valid zsh completion script is output",
+        "Verify the completion script includes all subcommands (daemon, ctl, migrate, version, init, etc.)",
+        "Verify completion for 'kahi ctl start <TAB>' includes available process names",
+        "Verify completion for signals in 'kahi ctl signal <TAB>' lists valid signal names"
+      ],
+      "passes": false,
+      "dependencies": ["cli-framework"]
+    },
+    {
+      "id": "signal-shutdown",
+      "category": "functional",
+      "title": "Graceful Shutdown on SIGTERM/SIGINT/SIGQUIT",
+      "description": "Initiate graceful shutdown on termination signals, stopping all groups in reverse priority order. A second signal forces immediate SIGKILL to all remaining processes.",
+      "testing_steps": [
+        "Send SIGTERM to Kahi and verify all process groups are stopped in reverse priority order and daemon exits with code 0",
+        "Send SIGINT to Kahi and verify the same graceful shutdown behavior as SIGTERM",
+        "Send a second SIGTERM during shutdown while processes are still stopping and verify SIGKILL is sent to all remaining processes",
+        "Verify autorestart is suppressed during shutdown",
+        "Verify new process starts are rejected during shutdown",
+        "Verify the API continues to serve status requests during shutdown",
+        "Verify processes that do not stop within stopwaitsecs receive SIGKILL escalation"
+      ],
+      "passes": false,
+      "dependencies": ["process-stop", "priority-ordering"]
+    },
+    {
+      "id": "signal-sighup-reload",
+      "category": "functional",
+      "title": "Config Reload on SIGHUP Signal",
+      "description": "Trigger config hot reload on SIGHUP signal with error handling for invalid config files.",
+      "testing_steps": [
+        "Send SIGHUP to Kahi after changing the config file and verify config is re-read and diff is applied",
+        "Send SIGHUP with a config file containing errors and verify reload is rejected with current config retained",
+        "Verify SIGHUP during startup is ignored",
+        "Verify SIGHUP during shutdown is ignored",
+        "Verify multiple rapid SIGHUPs are coalesced into a single reload"
+      ],
+      "passes": false,
+      "dependencies": ["config-hot-reload"]
+    },
+    {
+      "id": "signal-sigchld-reaping",
+      "category": "functional",
+      "title": "SIGCHLD Child Process Reaping",
+      "description": "Handle SIGCHLD by calling waitpid in a loop to reap all exited children, including orphaned grandchildren when running as PID 1.",
+      "testing_steps": [
+        "Write a test that exits a child process and verifies waitpid is called in a loop until ECHILD",
+        "Write a test simulating PID 1 mode where an orphaned grandchild exits and verify it is reaped",
+        "Verify SIGCHLD is handled via signal.Notify channel in the main goroutine",
+        "Verify multiple exits between polls are all collected in a single reaping loop"
+      ],
+      "passes": false,
+      "dependencies": ["process-reaping"]
+    },
+    {
+      "id": "signal-sigusr2-log-reopen",
+      "category": "functional",
+      "title": "SIGUSR2 Log File Reopen Signal Handler",
+      "description": "Handle SIGUSR2 by triggering log file reopen for all active log file handles.",
+      "testing_steps": [
+        "Send SIGUSR2 to Kahi and verify all log file handles are closed and reopened",
+        "Verify SIGUSR2 only affects file-based logs, not console or syslog destinations",
+        "Verify a file reopen failure is logged but does not crash the daemon"
+      ],
+      "passes": false,
+      "dependencies": ["log-reopen-sigusr2"]
+    },
+    {
+      "id": "signal-queuing",
+      "category": "functional",
+      "title": "Signal Queuing for Deferred Processing",
+      "description": "Queue signals via Go signal.Notify channel for deferred processing in the main loop, ensuring all signals are handled in order.",
+      "testing_steps": [
+        "Write a test that sends a signal while the main loop is busy and verify it is queued and processed on the next iteration",
+        "Write a test that sends multiple signals and verify they are handled in order",
+        "Verify the signal channel buffer size is at least 16 to handle burst scenarios",
+        "Verify signal processing always occurs in the main goroutine with no concurrent handlers"
+      ],
+      "passes": false,
+      "dependencies": ["go-module-structure"]
+    },
+    {
+      "id": "child-process-isolation",
+      "category": "functional",
+      "title": "Child Process Group Isolation",
+      "description": "Give each child process its own process group via setpgid so that signals sent to the supervisor are not received by children.",
+      "testing_steps": [
+        "Write a unit test that starts a child process and verifies setpgid is called to create a new process group",
+        "Write a test that sends SIGTERM to Kahi and verifies children in separate process groups do not receive it",
+        "Write a test that simulates setpgid failure and verifies a warning is logged but the process still starts",
+        "Verify process group isolation enables stop-as-group behavior for signaling entire child trees"
+      ],
+      "passes": false,
+      "dependencies": ["process-start"]
+    },
+    {
+      "id": "unprivileged-operation",
+      "category": "functional",
+      "title": "Unprivileged Non-Root Operation",
+      "description": "Run Kahi as non-root by default with user-accessible socket and log paths, no root-required functionality in default config.",
+      "testing_steps": [
+        "Start Kahi as non-root with default config and verify it starts and operates normally",
+        "Verify default socket path is /tmp/kahi-{uid}.sock when running as non-root",
+        "Verify default socket path is /var/run/kahi.sock when running as root",
+        "Start Kahi as non-root with config specifying user-accessible paths and verify all operations succeed",
+        "Configure a path not writable by the current user and verify exit with permission denied error"
+      ],
+      "passes": false,
+      "dependencies": ["unix-socket-server"]
+    },
+    {
+      "id": "privilege-dropping",
+      "category": "functional",
+      "title": "Optional Privilege Dropping to Configured User",
+      "description": "When running as root, optionally drop to a configured user after startup, with supplementary group support.",
+      "testing_steps": [
+        "Configure user='kahi' in [supervisor] section, start as root, and verify the daemon drops to the kahi user uid/gid after startup",
+        "Start as non-root with user config and verify the setting is ignored with a warning logged",
+        "Configure a nonexistent user and verify exit with 'user not found' error",
+        "Verify supplementary groups are computed from /etc/group",
+        "Verify privilege drop happens after socket creation but before processing requests"
+      ],
+      "passes": false,
+      "dependencies": ["unprivileged-operation"]
+    },
+    {
+      "id": "per-process-user-switching",
+      "category": "functional",
+      "title": "Per-Process User Switching",
+      "description": "When running as root, start child processes as specified users with uid, gid, and supplementary group configuration.",
+      "testing_steps": [
+        "Configure user='www-data' on a process, run Kahi as root, and verify the child runs as www-data uid/gid",
+        "Configure user on a process, run Kahi as non-root, and verify a warning is logged and the setting is ignored",
+        "Configure a nonexistent user on a process and verify it goes to FATAL with 'user not found' error",
+        "Verify user switching sets uid, gid, and supplementary groups before exec"
+      ],
+      "passes": false,
+      "dependencies": ["privilege-dropping"]
+    },
+    {
+      "id": "process-umask",
+      "category": "functional",
+      "title": "Per-Process and Daemon Umask Configuration",
+      "description": "Configure the file creation umask at the daemon level and per-process, specified as 4-digit octal strings.",
+      "testing_steps": [
+        "Configure umask='0027' in daemon config, start Kahi, and verify the daemon umask is set to 0027",
+        "Configure umask='0077' in a process config and verify the child umask is set to 0077 before exec",
+        "Parse a config with an invalid umask value and verify a config validation error is returned",
+        "Verify the default daemon umask is 0022 when not configured",
+        "Verify umask is specified as a 4-digit octal string in config"
+      ],
+      "passes": false,
+      "dependencies": ["process-start"]
+    },
+    {
+      "id": "root-detection-warning",
+      "category": "functional",
+      "title": "Root Detection Warning on Startup",
+      "description": "Log a warning when Kahi starts as root without explicit user configuration for privilege dropping.",
+      "testing_steps": [
+        "Start Kahi as root without user config in [supervisor] section and verify the warning is logged",
+        "Start Kahi as non-root and verify no warning about root is logged",
+        "Start Kahi as root with user config and verify no warning is logged",
+        "Verify the warning is logged once at startup and not repeated"
+      ],
+      "passes": false,
+      "dependencies": ["structured-logging"]
+    },
+    {
+      "id": "event-bus",
+      "category": "functional",
+      "title": "Internal Pub/Sub Event Bus",
+      "description": "Internal publish-subscribe system for event distribution, always active with zero overhead when no subscribers exist.",
+      "testing_steps": [
+        "Write a unit test that registers a subscriber for PROCESS_STATE_RUNNING and verifies the callback is called when the event fires",
+        "Write a unit test with multiple subscribers for the same event type and verify all are notified",
+        "Write a unit test that unsubscribes and verifies the callback is not called on subsequent events",
+        "Write a unit test where a subscriber callback panics and verify the panic is recovered, error is logged, and other subscribers are still notified",
+        "Verify event notification is synchronous in the main loop",
+        "Verify subscriber registration/unregistration is safe from any goroutine",
+        "Write a unit test with no subscribers and verify zero allocation overhead per published event",
+        "Write a unit test that subscribes to multiple different event types and verifies each type triggers the correct callback",
+        "Write a unit test that publishes 1000 events rapidly and verifies all subscribers receive all events in order",
+        "Write a unit test that registers and unregisters subscribers concurrently from multiple goroutines and verifies no race conditions"
+      ],
+      "passes": false,
+      "dependencies": ["go-module-structure"]
+    },
+    {
+      "id": "process-state-events",
+      "category": "functional",
+      "title": "Process State Transition Events",
+      "description": "Emit PROCESS_STATE_{STATE} events on every process state transition, including process name, group, from_state, pid, and expected flag.",
+      "testing_steps": [
+        "Write a test that transitions a process to RUNNING and verifies a PROCESS_STATE_RUNNING event is emitted with process name, group, and from_state",
+        "Write a test that transitions a process to EXITED and verifies the event includes the expected flag",
+        "Write a test that verifies events include pid when applicable (e.g., RUNNING state)",
+        "Write a test that verifies events are emitted after the state transition is committed",
+        "Write a test that verifies all 8 states have corresponding event types"
+      ],
+      "passes": false,
+      "dependencies": ["event-bus", "process-state-machine"]
+    },
+    {
+      "id": "process-log-events",
+      "category": "functional",
+      "title": "Process Output Log Events",
+      "description": "Emit PROCESS_LOG_STDOUT and PROCESS_LOG_STDERR events when enabled per-process, carrying the raw output data.",
+      "testing_steps": [
+        "Write a test with stdout_events_enabled=true that verifies PROCESS_LOG_STDOUT events are emitted when the process writes to stdout",
+        "Write a test with stdout_events_enabled=false (default) that verifies no log events are emitted",
+        "Verify log events contain raw output data before any ANSI stripping",
+        "Write a test that verifies stderr log events are emitted when stderr_events_enabled=true"
+      ],
+      "passes": false,
+      "dependencies": ["event-bus", "process-output-capture"]
+    },
+    {
+      "id": "supervisor-state-events",
+      "category": "functional",
+      "title": "Supervisor State Change Events",
+      "description": "Emit events when the supervisor itself changes state: SUPERVISOR_STATE_RUNNING on startup completion and SUPERVISOR_STATE_STOPPING on shutdown.",
+      "testing_steps": [
+        "Start Kahi and verify a SUPERVISOR_STATE_RUNNING event is emitted after startup completes",
+        "Initiate shutdown and verify a SUPERVISOR_STATE_STOPPING event is emitted",
+        "Verify these events fire exactly once per state change and not periodically"
+      ],
+      "passes": false,
+      "dependencies": ["event-bus"]
+    },
+    {
+      "id": "process-group-events",
+      "category": "functional",
+      "title": "Process Group Add/Remove Events",
+      "description": "Emit PROCESS_GROUP_ADDED and PROCESS_GROUP_REMOVED events when groups are added to or removed from active management.",
+      "testing_steps": [
+        "Add a group to active management and verify a PROCESS_GROUP_ADDED event is emitted with the group name",
+        "Remove a group from active management and verify a PROCESS_GROUP_REMOVED event is emitted with the group name",
+        "Verify group events fire after the operation completes, not before"
+      ],
+      "passes": false,
+      "dependencies": ["event-bus", "group-lifecycle"]
+    },
+    {
+      "id": "tick-events",
+      "category": "functional",
+      "title": "Periodic Tick Events",
+      "description": "Emit periodic TICK_5, TICK_60, and TICK_3600 events at 5-second, 60-second, and 3600-second intervals.",
+      "testing_steps": [
+        "Write a test using a mock Clock that verifies TICK_5 events are emitted every 5 seconds",
+        "Write a test that verifies TICK_60 events are emitted every 60 seconds",
+        "Write a test that verifies TICK_3600 events are emitted every 3600 seconds",
+        "Verify tick events include the timestamp of the tick",
+        "Verify ticks are not emitted during shutdown",
+        "Verify monotonic time is used so clock drift does not cause missed ticks"
+      ],
+      "passes": false,
+      "dependencies": ["event-bus"]
+    },
+    {
+      "id": "event-listener-pools",
+      "category": "functional",
+      "title": "Event Listener Process Pools",
+      "description": "Managed processes that subscribe to events via a stdin/stdout protocol, with READY/RESULT handshake, configurable buffer, and round-robin dispatch across pool members.",
+      "testing_steps": [
+        "Configure an event listener for PROCESS_STATE_EXITED with buffer_size=10 and verify events are queued when a process exits",
+        "Write a test where the listener sends 'READY\\n' and verify the event envelope is written to its stdin",
+        "Write a test where the listener responds 'RESULT 2\\nOK' and verify the event is acknowledged",
+        "Write a test where the listener responds 'RESULT 4\\nFAIL' and verify the event is re-queued for retry",
+        "Write a test where the listener crashes and verify it is restarted per autorestart policy",
+        "Write a test that overflows the event buffer and verify the oldest event is dropped with a warning",
+        "Write a test with an invalid result format from the listener and verify it is logged and the event is re-queued",
+        "Write a test with numprocs=3 listener pool and verify round-robin dispatch to READY listeners",
+        "Verify the event envelope format includes ver, server, serial, pool, poolserial, eventname, len, and payload",
+        "Write a test that subscribes to multiple event types in a single listener config and verify all matching events are dispatched"
+      ],
+      "passes": false,
+      "dependencies": ["event-bus", "process-state-events", "process-start"]
+    },
+    {
+      "id": "webhook-notifications",
+      "category": "functional",
+      "title": "Webhook HTTP POST Notifications",
+      "description": "Send HTTP POST notifications to configured URLs on specified events, with retry logic, exponential backoff, and circuit breaker.",
+      "testing_steps": [
+        "Configure a webhook for PROCESS_STATE_FATAL and verify an HTTP POST is sent when a process enters FATAL state",
+        "Write a test that simulates a webhook POST failure and verify retry with exponential backoff up to max_retries",
+        "Write a test that exhausts all retries and verify the error is logged and the daemon moves on",
+        "Write a test that triggers the circuit breaker after N consecutive failures and verify the webhook is suspended",
+        "Verify webhook delivery is async and never blocks the main supervision loop",
+        "Verify webhook timeout default is 5 seconds",
+        "Verify multiple webhooks can subscribe to the same event independently",
+        "Verify webhook failures do not affect process management",
+        "Write a test that configures a webhook for multiple event types and verifies POST is sent for each matching event",
+        "Write a test using a mock HTTP server that verifies the POST body contains JSON with event type, process name, and timestamp"
+      ],
+      "passes": false,
+      "dependencies": ["event-bus"]
+    },
+    {
+      "id": "webhook-templates",
+      "category": "functional",
+      "title": "Webhook Payload Templates",
+      "description": "Built-in payload templates for Slack, PagerDuty, and generic JSON webhook formats.",
+      "testing_steps": [
+        "Configure template='slack' and verify the payload matches Slack incoming webhook format with text field",
+        "Configure template='pagerduty' and verify the payload matches PagerDuty Events API v2 format",
+        "Configure template='generic' and verify the payload includes event, process, group, timestamp, and details fields",
+        "Parse a config with an unknown template name and verify a config validation error is returned",
+        "Verify templates support variable substitution from event data"
+      ],
+      "passes": false,
+      "dependencies": ["webhook-notifications"]
+    },
+    {
+      "id": "webhook-env-expansion",
+      "category": "functional",
+      "title": "Webhook Environment Variable Expansion",
+      "description": "Resolve environment variable references in webhook URLs and headers at config load time.",
+      "testing_steps": [
+        "Configure url='${SLACK_WEBHOOK_URL}' and set the env var and verify the URL is resolved at config load",
+        "Configure headers with '${API_TOKEN}' and set the env var and verify the header value is resolved",
+        "Configure a webhook with an undefined env var reference and verify a config error is returned",
+        "Verify expansion happens at config load time, not at delivery time",
+        "Verify webhook URLs and headers containing secrets are redacted in debug log output"
+      ],
+      "passes": false,
+      "dependencies": ["webhook-notifications", "toml-variable-expansion"]
+    },
+    {
+      "id": "webhook-tls-requirement",
+      "category": "functional",
+      "title": "Webhook HTTPS TLS Enforcement",
+      "description": "Enforce TLS for webhook destinations by default, with allow_insecure override and localhost exemption.",
+      "testing_steps": [
+        "Configure a webhook with http:// URL and verify config validation rejects it with a message about HTTPS",
+        "Configure allow_insecure=true on a webhook with http:// URL and verify it is accepted with a warning",
+        "Configure a webhook with localhost/127.0.0.1 http:// URL and verify it is accepted without allow_insecure",
+        "Parse a config with an invalid webhook URL format and verify a validation error is returned",
+        "Verify TLS certificate verification uses the system trust store"
+      ],
+      "passes": false,
+      "dependencies": ["webhook-notifications"]
+    },
+    {
+      "id": "prometheus-metrics-endpoint",
+      "category": "functional",
+      "title": "Prometheus /metrics Endpoint",
+      "description": "Expose Prometheus-compatible metrics endpoint with process and supervisor metrics in text exposition format.",
+      "testing_steps": [
+        "Configure [server.metrics] enabled=true and make a GET request to /metrics and verify Prometheus text format is returned",
+        "Verify the response includes Go runtime metrics (goroutines, memory, GC)",
+        "Verify /metrics does not require authentication",
+        "Verify metric names follow Prometheus naming conventions (snake_case, _total for counters)",
+        "Configure metrics disabled and verify /metrics returns 404"
+      ],
+      "passes": false,
+      "dependencies": ["tcp-http-server"]
+    },
+    {
+      "id": "process-metrics",
+      "category": "functional",
+      "title": "Per-Process Prometheus Metrics",
+      "description": "Per-process Prometheus metrics for state gauge, start counter, exit counter with expected label, and uptime gauge.",
+      "testing_steps": [
+        "Scrape /metrics with a RUNNING process 'web' and verify kahi_process_state{name=\"web\",group=\"web\"} equals 20",
+        "Start a process 5 times and scrape /metrics and verify kahi_process_start_total{name=\"web\"} equals 5",
+        "Cause an unexpected exit and scrape /metrics and verify kahi_process_exit_total{name=\"web\",expected=\"false\"} is incremented",
+        "Verify metrics survive config reload and counters are not reset",
+        "Verify removed processes have their metrics cleaned up after retention period"
+      ],
+      "passes": false,
+      "dependencies": ["prometheus-metrics-endpoint"]
+    },
+    {
+      "id": "supervisor-metrics",
+      "category": "functional",
+      "title": "Supervisor-Level Prometheus Metrics",
+      "description": "Daemon-level Prometheus metrics: uptime, process count per state, config reload counters, and build info gauge.",
+      "testing_steps": [
+        "Scrape /metrics and verify kahi_supervisor_uptime_seconds gauge is present and increasing",
+        "Scrape /metrics and verify kahi_supervisor_processes{state=\"running\"} gauge reflects actual running process count",
+        "Trigger a config reload and verify kahi_supervisor_config_reload_total counter increments",
+        "Trigger a failed config reload and verify kahi_supervisor_config_reload_errors_total counter increments",
+        "Verify kahi_info{version=...,go_version=...,fips=...} is a constant 1 gauge with build metadata labels"
+      ],
+      "passes": false,
+      "dependencies": ["prometheus-metrics-endpoint"]
+    },
+    {
+      "id": "foreground-mode",
+      "category": "functional",
+      "title": "Foreground Mode (Default)",
+      "description": "Run Kahi in the foreground by default, logging to stdout without forking, suitable for containers and systemd.",
+      "testing_steps": [
+        "Run 'kahi daemon' without --daemonize and verify it stays in the foreground and logs to stdout",
+        "Run Kahi as PID 1 in a container and verify it handles signals, reaps zombies, and manages processes",
+        "Press Ctrl+C in foreground mode and verify graceful shutdown is triggered",
+        "Verify foreground mode is the default with no flag needed to enable it"
+      ],
+      "passes": false,
+      "dependencies": ["cli-framework"]
+    },
+    {
+      "id": "optional-daemonization",
+      "category": "functional",
+      "title": "Optional Double-Fork Daemonization",
+      "description": "Optionally daemonize via double-fork for bare-metal deployments, with PID file management and stale PID detection.",
+      "testing_steps": [
+        "Run 'kahi daemon --daemonize' and verify it double-forks, redirects stdio to /dev/null, and writes PID file",
+        "Verify the PID file contains the correct daemon PID",
+        "Stop the daemon and verify the PID file is removed",
+        "Configure a non-writable PID file path and verify exit with an appropriate error",
+        "Start a second daemon instance with the same PID file and verify it detects the running instance and exits with error",
+        "Create a stale PID file (process not running) and start the daemon and verify it is overwritten with a warning"
+      ],
+      "passes": false,
+      "dependencies": ["foreground-mode"]
+    },
+    {
+      "id": "pid1-zombie-reaping",
+      "category": "functional",
+      "title": "PID 1 Zombie Process Reaping",
+      "description": "When running as PID 1 in a container, reap all orphaned child processes via waitpid(-1, WNOHANG) to prevent zombie accumulation.",
+      "testing_steps": [
+        "Write a test that simulates PID 1 mode and creates orphaned child processes and verifies they are reaped",
+        "Write a test that verifies Kahi only reaps its own children when not running as PID 1",
+        "Verify PID 1 detection occurs at startup using os.Getpid() == 1",
+        "Verify the reaping loop runs as part of the main supervision tick, not as a separate goroutine"
+      ],
+      "passes": false,
+      "dependencies": ["process-reaping"]
+    },
+    {
+      "id": "graceful-shutdown",
+      "category": "functional",
+      "title": "Graceful Shutdown Orchestration",
+      "description": "Stop all process groups in reverse priority order during shutdown, with configurable timeout and SIGKILL escalation.",
+      "testing_steps": [
+        "Initiate shutdown with groups at priorities 100, 200, 300 and verify stop order is 300, 200, 100",
+        "Write a test that verifies processes not stopping within stopwaitsecs receive SIGKILL",
+        "Write a test that verifies Kahi exits with code 0 after all processes have stopped",
+        "Write a test that simulates a stuck process and verifies exit occurs after the configurable shutdown timeout",
+        "Verify the default shutdown timeout is 30 seconds",
+        "Verify if total shutdown exceeds timeout, remaining processes are killed and daemon exits"
+      ],
+      "passes": false,
+      "dependencies": ["process-stop", "priority-ordering"]
+    },
+    {
+      "id": "working-directory",
+      "category": "functional",
+      "title": "Working Directory Configuration",
+      "description": "Configure working directory for the daemon and per-process, with support for variable expansion.",
+      "testing_steps": [
+        "Configure directory='/opt/app' in daemon config and verify working directory is changed to /opt/app on startup",
+        "Configure directory='/opt/app/web' in process config and verify child working directory is set correctly",
+        "Configure a nonexistent directory and verify a config validation error is returned",
+        "Configure a non-accessible directory and verify an appropriate error is returned",
+        "Verify per-process directory supports variable expansion"
+      ],
+      "passes": false,
+      "dependencies": ["process-start", "toml-variable-expansion"]
+    },
+    {
+      "id": "resource-limits",
+      "category": "functional",
+      "title": "Resource Limits (rlimit) Configuration",
+      "description": "Configure minimum file descriptor and process count limits, attempting to raise rlimits at startup.",
+      "testing_steps": [
+        "Configure minfds=4096 and verify Kahi attempts to raise RLIMIT_NOFILE to 4096 at startup",
+        "Configure minprocs=512 and verify Kahi attempts to raise RLIMIT_NPROC to 512 at startup",
+        "Write a test that simulates a rlimit raise failure and verifies Kahi exits with an error including current soft/hard values",
+        "Verify default values are minfds=1024 and minprocs=200",
+        "Verify rlimits are only raised when the current value is below the configured minimum"
+      ],
+      "passes": false,
+      "dependencies": ["go-module-structure"]
+    },
+    {
+      "id": "config-migration-tool",
+      "category": "functional",
+      "title": "supervisord.conf to kahi.toml Migration Tool",
+      "description": "Convert supervisord.conf INI format to kahi.toml TOML format, preserving semantics and noting unsupported options as comments.",
+      "testing_steps": [
+        "Run 'kahi migrate supervisord.conf' with a valid config and verify equivalent kahi.toml content is printed to stdout",
+        "Run 'kahi migrate supervisord.conf --output kahi.toml' and verify the file is written to disk",
+        "Run 'kahi migrate' with a config containing unsupported options and verify warnings and TOML comments are generated",
+        "Run 'kahi migrate nonexistent.conf' and verify 'file not found' error",
+        "Run 'kahi migrate invalid.conf' and verify 'parse error' with details",
+        "Run 'kahi migrate --output existing.toml' without --force and verify it refuses to overwrite",
+        "Verify [include] sections are expanded and inlined during migration",
+        "Verify environment variables are mapped from supervisord format to Kahi format",
+        "Verify signal names are normalized (e.g., TERM to SIGTERM)",
+        "Verify comments from the original file are preserved as TOML comments where possible"
+      ],
+      "passes": false,
+      "dependencies": ["toml-config-parser"]
+    },
+    {
+      "id": "migration-ini-parser",
+      "category": "functional",
+      "title": "supervisord INI Config Format Parser",
+      "description": "Parse supervisord INI config format including all section types, inline comments, continuation lines, and supervisord-specific variable syntax.",
+      "testing_steps": [
+        "Parse a supervisord.conf and verify all section types are recognized: [supervisord], [program:name], [group:name], [eventlistener:name], [fcgi-program:name], [include], [unix_http_server], [inet_http_server]",
+        "Parse an INI file with inline comments (;) and verify comments are stripped from values",
+        "Parse an INI file with continuation lines (leading whitespace) and verify values are joined",
+        "Parse a malformed INI file and verify an error with line number is returned",
+        "Parse an INI file with an unknown section type and verify a warning is generated",
+        "Verify %(ENV_X)s syntax is mapped to Kahi's ${X} syntax",
+        "Verify boolean values (true/false, yes/no, on/off, 1/0) map to TOML booleans"
+      ],
+      "passes": false,
+      "dependencies": ["go-module-structure"]
+    },
+    {
+      "id": "migration-option-mapping",
+      "category": "functional",
+      "title": "supervisord to Kahi Option Mapping",
+      "description": "Map all supervisord config options to their Kahi TOML equivalents, with comments for unsupported and renamed options.",
+      "testing_steps": [
+        "Migrate a config with startsecs=10 and verify TOML output contains startsecs = 10",
+        "Migrate a config with autorestart=unexpected and verify TOML output contains autorestart = \"unexpected\"",
+        "Migrate a config with an unsupported option and verify a TOML comment is generated: # UNSUPPORTED: ...",
+        "Migrate a config with a renamed option and verify the Kahi name is used with a comment noting the original",
+        "Verify byte size values (e.g., 50MB) are preserved in human-readable format",
+        "Verify signal names are normalized to uppercase"
+      ],
+      "passes": false,
+      "dependencies": ["migration-ini-parser"]
+    },
+    {
+      "id": "migration-dry-run",
+      "category": "functional",
+      "title": "Migration Dry Run Preview",
+      "description": "Preview migration output without writing files, printing generated TOML with warnings to stdout.",
+      "testing_steps": [
+        "Run 'kahi migrate supervisord.conf --dry-run' and verify TOML is printed to stdout with no file written",
+        "Verify dry run output includes any warnings about unsupported options",
+        "Verify dry run is the default behavior when no --output is specified"
+      ],
+      "passes": false,
+      "dependencies": ["config-migration-tool"]
+    },
+    {
+      "id": "migration-validation",
+      "category": "functional",
+      "title": "Post-Migration Config Validation",
+      "description": "Validate the generated kahi.toml after migration by parsing and validating it as a valid Kahi config, reporting errors for manual correction.",
+      "testing_steps": [
+        "Run migration and verify the generated TOML is parsed and validated as a valid Kahi config",
+        "Run migration on a config that produces validation errors and verify they are reported to the user",
+        "Verify the generated file is still available for manual correction even when validation errors exist",
+        "Verify validation catches missing required fields that could not be inferred from supervisord config"
+      ],
+      "passes": false,
+      "dependencies": ["config-migration-tool", "toml-config-parser"]
+    },
+    {
+      "id": "fastcgi-program-definition",
+      "category": "functional",
+      "title": "FastCGI Program Configuration",
+      "description": "Define FastCGI programs with managed socket configuration supporting both Unix and TCP sockets, passed to child processes via file descriptor inheritance.",
+      "testing_steps": [
+        "Parse a [fcgi_programs.php] section with a Unix socket and verify the program config includes socket management metadata",
+        "Parse a [fcgi_programs.php] section with a TCP socket and verify TCP binding is configured",
+        "Write a test that starts a FastCGI program and verifies the socket is passed via file descriptor inheritance",
+        "Parse a config with a missing socket for an fcgi_program and verify a validation error is returned",
+        "Parse a config with an invalid socket format and verify a validation error is returned",
+        "Verify FastCGI programs support all standard program options (autorestart, numprocs, etc.)"
+      ],
+      "passes": false,
+      "dependencies": ["process-start"]
+    },
+    {
+      "id": "fastcgi-socket-management",
+      "category": "functional",
+      "title": "FastCGI Socket Lifecycle Management",
+      "description": "Create, bind, and manage FastCGI sockets with reference counting for shared socket usage across numprocs instances.",
+      "testing_steps": [
+        "Write a test that starts the first FastCGI process and verifies the socket is created and bound",
+        "Write a test with numprocs=3 that verifies the same socket is shared across all processes with reference count tracking",
+        "Write a test that stops all FastCGI processes and verifies the socket is closed and cleaned up when reference count reaches 0",
+        "Write a test that simulates a socket bind failure and verifies the process goes to FATAL",
+        "Verify Unix sockets support configurable owner and mode (socket_owner, socket_mode)",
+        "Verify the socket is re-created on process restart if it was cleaned up"
+      ],
+      "passes": false,
+      "dependencies": ["fastcgi-program-definition"]
+    },
+    {
+      "id": "cli-health-check",
+      "category": "functional",
+      "title": "CLI Health and Readiness Check Commands",
+      "description": "CLI subcommands for liveness and readiness checks, designed for Kubernetes exec probes with exit code 0 for healthy/ready and 1 for not.",
+      "testing_steps": [
+        "Run 'kahi ctl health' while daemon is responsive and verify 'OK' output with exit code 0",
+        "Run 'kahi ctl health' while daemon is not responsive and verify error output with exit code 1",
+        "Run 'kahi ctl ready' after all autostart processes have stabilized and verify 'READY' output with exit code 0",
+        "Run 'kahi ctl ready --process web,api' with both RUNNING and verify 'READY' with exit code 0",
+        "Run 'kahi ctl ready' with pending processes and verify 'NOT READY' output with exit code 1",
+        "Run 'kahi ctl health' when cannot connect to daemon and verify exit code 1 with connection error"
+      ],
+      "passes": false,
+      "dependencies": ["health-check-endpoint", "readiness-check-endpoint", "cli-process-control"]
+    },
+    {
+      "id": "process-stdin-writing",
+      "category": "functional",
+      "title": "Process stdin Writing via API and CLI",
+      "description": "Write data to a process's standard input via REST API or CLI, with error handling for non-running processes and processes without stdin.",
+      "testing_steps": [
+        "Make a POST request to /api/v1/processes/web/stdin with body {\"data\":\"quit\\n\"} and verify 'quit\\n' is written to the process stdin pipe",
+        "Run 'kahi ctl send web quit' and verify the data is written to stdin with a trailing newline",
+        "Write stdin to a non-running process and verify 'process not running' error",
+        "Write stdin to a process without stdin configured and verify 'does not accept stdin' error",
+        "Write stdin to a process with a broken pipe and verify appropriate error message"
+      ],
+      "passes": false,
+      "dependencies": ["rest-api-endpoints", "process-start"]
+    },
+    {
+      "id": "web-ui-status-page",
+      "category": "functional",
+      "title": "Web UI HTML Status Page",
+      "description": "HTML page showing all processes with state, PID, uptime, action buttons, and auto-refresh via JavaScript.",
+      "testing_steps": [
+        "Enable Web UI and request GET / in a browser and verify an HTML page listing all processes is returned",
+        "Verify the page shows name, group, state (color-coded), PID, uptime, description for each process",
+        "Verify action buttons (Start, Stop, Restart, Clear Log, Tail Stdout, Tail Stderr) are present",
+        "Click 'Stop All' button and verify the corresponding API action is triggered",
+        "Verify the page auto-refreshes status every 5 seconds via JavaScript",
+        "Verify the page works without JavaScript (static HTML with forms as fallback)",
+        "Verify the layout is responsive and collapses for mobile screens"
+      ],
+      "passes": false,
+      "dependencies": ["rest-api-endpoints"]
+    },
+    {
+      "id": "web-ui-log-viewer",
+      "category": "functional",
+      "title": "Web UI Browser-Based Log Viewer",
+      "description": "Browser-based real-time log tailing for process stdout/stderr via SSE, with auto-scroll and ANSI color rendering.",
+      "testing_steps": [
+        "Click 'Tail Stdout' for a process and verify real-time stdout output is streamed to the browser via SSE",
+        "Select stderr in the log viewer and verify stderr is streamed instead",
+        "Verify the log viewer shows last N lines on initial load then streams new lines",
+        "Write a test that simulates SSE connection drop and verify auto-reconnect behavior",
+        "Verify ANSI escape codes are rendered as colors in the browser",
+        "Verify auto-scroll to bottom with manual scroll override support",
+        "Verify a message is displayed when no log file is configured for the process"
+      ],
+      "passes": false,
+      "dependencies": ["sse-streaming", "web-ui-status-page"]
+    },
+    {
+      "id": "web-ui-embedded-assets",
+      "category": "functional",
+      "title": "Web UI go:embed Static Assets",
+      "description": "Serve Web UI HTML, CSS, and JavaScript from go:embed embedded assets with optional override from a custom static directory.",
+      "testing_steps": [
+        "Build the binary and deploy it alone and verify HTML/CSS/JS are served from embedded assets",
+        "Configure static_dir='/opt/kahi/web' and verify files from the directory override embedded assets",
+        "Configure static_dir to a nonexistent path and verify fallback to embedded assets with a warning",
+        "Verify embedded assets include a favicon and minimal CSS",
+        "Verify Content-Type headers are set correctly based on file extension",
+        "Verify caching headers (ETag, Cache-Control) are set for static assets"
+      ],
+      "passes": false,
+      "dependencies": ["web-ui-status-page"]
+    },
+    {
+      "id": "hash-password-subcommand",
+      "category": "functional",
+      "title": "kahi hash-password Subcommand",
+      "description": "Generate bcrypt password hashes for use in config files, supporting interactive prompt and piped input.",
+      "testing_steps": [
+        "Run 'kahi hash-password' interactively and type a password and verify a bcrypt hash is printed to stdout",
+        "Run 'echo mypassword | kahi hash-password' and verify a bcrypt hash is printed to stdout",
+        "Verify the output is just the hash string suitable for copy-paste into config",
+        "Run 'kahi hash-password' with an empty password and verify 'password cannot be empty' error",
+        "Verify the password prompt suppresses echo for security"
+      ],
+      "passes": false,
+      "dependencies": ["cli-framework"]
+    },
+    {
+      "id": "process-output-ring-buffer",
+      "category": "functional",
+      "title": "In-Memory Process Output Ring Buffer",
+      "description": "Maintain a configurable in-memory ring buffer per process per stream (stdout/stderr) for log tailing without file logging, with oldest data eviction.",
+      "testing_steps": [
+        "Write a test with default config and verify 'kahi ctl tail web' returns data from the ring buffer",
+        "Configure stdout_capture_maxbytes='1MB' and write more than 1MB to stdout and verify the buffer holds only the last 1MB",
+        "Write a test that verifies new output evicts the oldest data when the buffer is full",
+        "Verify the ring buffer is per-process per-stream (stdout and stderr are separate)",
+        "Verify memory is freed when a process config is removed",
+        "Verify the ring buffer feeds SSE streaming when no log file exists"
+      ],
+      "passes": false,
+      "dependencies": ["process-output-capture"]
+    },
+    {
+      "id": "web-ui-visual-design",
+      "category": "style",
+      "title": "Web UI Visual Design and Responsive Layout",
+      "description": "Clean, functional Web UI with distinct state colors, responsive table-to-card layout, monospace log viewer, and self-contained CSS/JS.",
+      "testing_steps": [
+        "Verify process states use distinct colors: RUNNING=green, FATAL=red, STARTING/BACKOFF=yellow, STOPPED/EXITED=gray, STOPPING=orange",
+        "Verify table layout is responsive and collapses to card layout on screens narrower than 768px",
+        "Verify action buttons are clearly labeled and grouped logically",
+        "Verify the log viewer uses monospace font with a dark background",
+        "Verify no external CSS or JS dependencies are loaded (self-contained)"
+      ],
+      "passes": false,
+      "dependencies": ["web-ui-status-page"]
+    },
+    {
+      "id": "cli-output-formatting",
+      "category": "style",
+      "title": "CLI Output Formatting and Color Support",
+      "description": "Consistent, readable CLI output with aligned columns, color-coded states, automatic color detection, and --no-color and --json flags.",
+      "testing_steps": [
+        "Run 'kahi ctl status' in a terminal and verify columns are aligned with consistent padding",
+        "Verify state labels are color-coded when stdout is a terminal (RUNNING=green, FATAL=red, etc.)",
+        "Pipe 'kahi ctl status' output to a file and verify colors are disabled automatically",
+        "Run 'kahi ctl status --no-color' and verify colors are disabled explicitly",
+        "Run 'kahi ctl status --json' and verify machine-readable JSON output is returned"
+      ],
+      "passes": false,
+      "dependencies": ["cli-status-display"]
+    },
+    {
+      "id": "unit-test-infrastructure",
+      "category": "testing",
+      "title": "Unit Test Patterns and Coverage Infrastructure",
+      "description": "Establish unit test patterns with mock process spawning, in-memory config parsing, testify assertions, and 85% coverage enforcement.",
+      "testing_steps": [
+        "Run 'go test ./...' and verify all unit tests pass with exit code 0",
+        "Run 'go test -coverprofile=coverage.out ./...' and verify coverage is measured",
+        "Run 'task coverage' and verify it fails if coverage is below 85%",
+        "Verify process management tests use mock ProcessSpawner with no real child processes",
+        "Verify config parsing tests use in-memory TOML strings via MustParseConfig helper",
+        "Verify testify assertions (assert, require) are used consistently across tests"
+      ],
+      "passes": false,
+      "dependencies": ["taskfile-workflow"]
+    },
+    {
+      "id": "integration-test-infrastructure",
+      "category": "testing",
+      "title": "Integration Test Infrastructure with Real I/O",
+      "description": "Integration tests that start a real Kahi daemon on a random Unix socket, interact via kahi ctl, and clean up all resources on completion.",
+      "testing_steps": [
+        "Verify integration tests are tagged with //go:build integration",
+        "Run 'task test-integration' and verify integration tests run with the correct build tag",
+        "Write an integration test that starts a real Kahi daemon on a random Unix socket using StartTestDaemon helper",
+        "Write an integration test that uses 'kahi ctl' to start and stop a process",
+        "Verify all integration tests clean up processes and sockets on completion",
+        "Verify integration test temp directories are cleaned up via TempDir helper"
+      ],
+      "passes": false,
+      "dependencies": ["unit-test-infrastructure", "unix-socket-server"]
+    },
+    {
+      "id": "e2e-test-infrastructure",
+      "category": "testing",
+      "title": "End-to-End Test Infrastructure",
+      "description": "E2E tests that exercise the full system with real processes (sleep, echo), verifying process lifecycle, API responses, and CLI output.",
+      "testing_steps": [
+        "Verify E2E tests are tagged with //go:build e2e",
+        "Run 'task test-e2e' and verify E2E tests run with the correct build tag",
+        "Write an E2E test that starts a real Kahi daemon, configures real programs (sleep, echo), and verifies process start",
+        "Write an E2E test that verifies process stop, restart, and autorestart behavior with real processes",
+        "Write an E2E test that verifies API endpoints return correct status for running processes",
+        "Write an E2E test that verifies CLI commands produce expected output strings",
+        "Verify all E2E tests run in isolated temp directories",
+        "Verify E2E tests have a configurable timeout to prevent hanging on failures",
+        "Write an E2E test that verifies graceful shutdown stops all processes and exits with code 0",
+        "Write an E2E test that verifies config hot reload adds and removes processes correctly"
+      ],
+      "passes": false,
+      "dependencies": ["integration-test-infrastructure"]
+    }
+  ]
+}
