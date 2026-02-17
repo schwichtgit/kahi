@@ -194,15 +194,16 @@ autostart = true
 startsecs = 1
 startretries = 1
 `)
-	// Process should end up in FATAL after retries exhausted.
 	waitForState(t, client, "broken", "FATAL", 15*time.Second)
 }
 
 func TestProcess_StopWaitSecs(t *testing.T) {
-	// Process that traps SIGTERM with a short stopwaitsecs.
+	dir := t.TempDir()
+	script := writeScript(t, dir, "stubborn.sh", "trap '' TERM\nsleep 300")
+
 	client, _ := startDaemon(t, `
 [programs.stubborn]
-command = "/bin/sh -c 'trap \"\" TERM; sleep 300'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 stopwaitsecs = 2

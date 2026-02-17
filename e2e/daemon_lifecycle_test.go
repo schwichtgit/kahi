@@ -123,10 +123,12 @@ func TestDaemon_Shutdown(t *testing.T) {
 }
 
 func TestDaemon_ShutdownTimeout(t *testing.T) {
-	// Use a process that traps SIGTERM and doesn't exit.
+	dir := t.TempDir()
+	script := writeScript(t, dir, "stubborn.sh", "trap '' TERM\nsleep 300")
+
 	client, _ := startDaemon(t, `
 [programs.stubborn]
-command = "/bin/sh -c 'trap \"\" TERM; sleep 300'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 stopwaitsecs = 2

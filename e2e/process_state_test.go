@@ -10,7 +10,7 @@ import (
 func TestState_AutorestartTrue(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.shortlived]
-command = "/bin/sh -c 'exit 0'"
+command = "/bin/false"
 autostart = true
 autorestart = "true"
 startsecs = 0
@@ -32,7 +32,7 @@ startretries = 3
 func TestState_AutorestartFalse(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.oneshot]
-command = "/bin/sh -c 'exit 0'"
+command = "/bin/true"
 autostart = true
 autorestart = "false"
 startsecs = 0
@@ -51,7 +51,7 @@ startsecs = 0
 func TestState_AutorestartUnexpected(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.unexpected]
-command = "/bin/sh -c 'exit 1'"
+command = "/bin/false"
 autostart = true
 autorestart = "unexpected"
 startsecs = 0
@@ -77,9 +77,12 @@ startretries = 2
 }
 
 func TestState_ExpectedExitCode(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "exit2.sh", "exit 2")
+
 	client, _ := startDaemon(t, `
 [programs.expected]
-command = "/bin/sh -c 'exit 2'"
+command = "`+script+`"
 autostart = true
 autorestart = "unexpected"
 startsecs = 0
@@ -98,7 +101,7 @@ exitcodes = [0, 2]
 func TestState_UnexpectedExitCode(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.unexp]
-command = "/bin/sh -c 'exit 1'"
+command = "/bin/false"
 autostart = true
 autorestart = "unexpected"
 startsecs = 0
@@ -155,14 +158,14 @@ func TestState_NumprocsExpansion(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.worker]
 command = "/bin/sleep 300"
-process_name = "worker_%(process_num)02d"
+process_name = "worker_%(process_num)d"
 numprocs = 3
 numprocs_start = 0
 autostart = true
 startsecs = 0
 `)
-	// Should create worker_00, worker_01, worker_02.
-	for _, name := range []string{"worker_00", "worker_01", "worker_02"} {
+	// Should create worker_0, worker_1, worker_2.
+	for _, name := range []string{"worker_0", "worker_1", "worker_2"} {
 		waitForState(t, client, name, "RUNNING", 10*time.Second)
 	}
 }

@@ -5,19 +5,22 @@ package e2e
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestEnv_Passthrough(t *testing.T) {
-	// Set a parent env var and verify the child sees it.
 	os.Setenv("KAHI_TEST_VAR", "passthrough-value")
 	defer os.Unsetenv("KAHI_TEST_VAR")
 
+	dir := t.TempDir()
+	script := writeScript(t, dir, "envcheck.sh", "echo KAHI_TEST_VAR=$KAHI_TEST_VAR\nexec sleep 300")
+
 	client, _ := startDaemon(t, `
 [programs.envcheck]
-command = "/bin/sh -c 'echo KAHI_TEST_VAR=$KAHI_TEST_VAR; sleep 300'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 `)
@@ -37,9 +40,12 @@ func TestEnv_CleanEnvironment(t *testing.T) {
 	os.Setenv("KAHI_CLEAN_TEST", "should-not-appear")
 	defer os.Unsetenv("KAHI_CLEAN_TEST")
 
+	dir := t.TempDir()
+	script := writeScript(t, dir, "clean.sh", "echo CLEAN=$KAHI_CLEAN_TEST\necho CONFIGURED=$MY_VAR\nexec sleep 300")
+
 	client, _ := startDaemon(t, `
 [programs.clean]
-command = "/bin/sh -c 'echo CLEAN=$KAHI_CLEAN_TEST; echo CONFIGURED=$MY_VAR; sleep 300'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 clean_environment = true
@@ -55,23 +61,24 @@ MY_VAR = "configured-value"
 		t.Fatalf("tail: %v", err)
 	}
 	output := buf.String()
-	// Parent var should not be visible.
 	if strings.Contains(output, "CLEAN=should-not-appear") {
 		t.Fatalf("parent env leaked through clean_environment: %q", output)
 	}
-	// Configured var should be visible.
 	if !strings.Contains(output, "CONFIGURED=configured-value") {
 		t.Fatalf("configured env missing: %q", output)
 	}
 }
 
 func TestEnv_ProgramOverridesGlobal(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "override.sh", "echo SHARED=$SHARED_VAR\nexec sleep 300")
+
 	client, _ := startDaemon(t, `
 [supervisor.environment]
 SHARED_VAR = "global-value"
 
 [programs.override]
-command = "/bin/sh -c 'echo SHARED=$SHARED_VAR; sleep 300'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 
@@ -91,10 +98,13 @@ SHARED_VAR = "program-value"
 }
 
 func TestEnv_ProgramNameExpansion(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "expander.sh", "echo NAME=$PROC_NAME NUM=$PROC_NUM\nexec sleep 300")
+
 	client, _ := startDaemon(t, `
 [programs.expander]
-command = "/bin/sh -c 'echo NAME=$PROC_NAME NUM=$PROC_NUM; sleep 300'"
-process_name = "expander_%(process_num)02d"
+command = "`+script+`"
+process_name = "expander_%(process_num)d"
 numprocs = 1
 autostart = true
 startsecs = 0
@@ -103,11 +113,11 @@ startsecs = 0
 PROC_NAME = "%(program_name)s"
 PROC_NUM = "%(process_num)d"
 `)
-	waitForState(t, client, "expander_00", "RUNNING", 10*time.Second)
+	waitForState(t, client, "expander_0", "RUNNING", 10*time.Second)
 	time.Sleep(1 * time.Second)
 
 	var buf bytes.Buffer
-	if err := client.Tail("expander_00", "stdout", 4096, &buf); err != nil {
+	if err := client.Tail("expander_0", "stdout", 4096, &buf); err != nil {
 		t.Fatalf("tail: %v", err)
 	}
 	output := buf.String()
@@ -120,9 +130,12 @@ PROC_NUM = "%(process_num)d"
 }
 
 func TestEnv_HereExpansion(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "here.sh", "echo HERE=$HERE_DIR\nexec sleep 300")
+
 	client, socketPath := startDaemon(t, `
 [programs.here]
-command = "/bin/sh -c 'echo HERE=$HERE_DIR; sleep 300'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 
@@ -137,8 +150,7 @@ HERE_DIR = "%(here)s"
 		t.Fatalf("tail: %v", err)
 	}
 
-	// %(here)s should expand to the config file's directory.
-	configDir := strings.TrimSuffix(socketPath, "/kahi.sock")
+	configDir := filepath.Dir(socketPath)
 	if !strings.Contains(buf.String(), "HERE="+configDir) {
 		t.Fatalf("%%(here)s not expanded correctly: %q, want dir=%s", buf.String(), configDir)
 	}

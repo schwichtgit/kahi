@@ -190,6 +190,18 @@ func getProcessInfo(client *ctl.Client, name string) (processInfo, error) {
 	return infos[0], nil
 }
 
+// writeScript creates an executable shell script in dir and returns its path.
+// Use this instead of "/bin/sh -c '...'" since kahi uses strings.Fields for
+// command tokenization (no shell quoting support).
+func writeScript(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+content+"\n"), 0755); err != nil {
+		t.Fatalf("write script %s: %v", name, err)
+	}
+	return path
+}
+
 // getAllProcessInfo fetches info for all processes.
 func getAllProcessInfo(client *ctl.Client) ([]processInfo, error) {
 	var buf bytes.Buffer

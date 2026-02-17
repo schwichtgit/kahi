@@ -12,9 +12,12 @@ import (
 )
 
 func TestStdin_Write(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "cat.sh", "while read line; do echo got:$line; done")
+
 	client, _ := startDaemon(t, `
 [programs.cat]
-command = "/bin/sh -c 'while read line; do echo got:$line; done'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 `)
@@ -41,7 +44,6 @@ func TestStdin_WriteStopped(t *testing.T) {
 command = "/bin/cat"
 autostart = false
 `)
-	// Process is stopped, writing should fail.
 	err := client.WriteStdin("stopped", "data")
 	if err == nil {
 		t.Fatal("expected error writing stdin to stopped process")
@@ -49,9 +51,12 @@ autostart = false
 }
 
 func TestStdin_Attach(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "interactive.sh", "while read line; do echo reply:$line; done")
+
 	client, _ := startDaemon(t, `
 [programs.interactive]
-command = "/bin/sh -c 'while read line; do echo reply:$line; done'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 `)
@@ -75,7 +80,6 @@ startsecs = 0
 		}})
 	}()
 
-	// Wait for response.
 	deadline := time.After(5 * time.Second)
 	for {
 		stdout.mu.Lock()
@@ -88,7 +92,6 @@ startsecs = 0
 		case <-deadline:
 			stdout.mu.Lock()
 			t.Fatalf("no reply received, stdout = %q", stdout.buf.String())
-			stdout.mu.Unlock()
 		case <-time.After(100 * time.Millisecond):
 		}
 	}

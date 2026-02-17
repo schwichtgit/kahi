@@ -14,14 +14,17 @@ import (
 )
 
 func TestLog_TailStdout(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "echoer.sh", "echo hello-stdout\nexec sleep 300")
+
 	client, _ := startDaemon(t, `
 [programs.echoer]
-command = "/bin/sh -c 'echo hello-stdout; sleep 300'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 `)
 	waitForState(t, client, "echoer", "RUNNING", 5*time.Second)
-	time.Sleep(1 * time.Second) // Give output time to be captured.
+	time.Sleep(1 * time.Second)
 
 	var buf bytes.Buffer
 	if err := client.Tail("echoer", "stdout", 4096, &buf); err != nil {
@@ -33,9 +36,12 @@ startsecs = 0
 }
 
 func TestLog_TailStderr(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "errwriter.sh", "echo hello-stderr >&2\nexec sleep 300")
+
 	client, _ := startDaemon(t, `
 [programs.errwriter]
-command = "/bin/sh -c 'echo hello-stderr >&2; sleep 300'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 `)
@@ -52,21 +58,23 @@ startsecs = 0
 }
 
 func TestLog_TailBytes(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "longout.sh", "seq 1 100 | while read i; do echo line-$i; done\nexec sleep 300")
+
 	client, _ := startDaemon(t, `
 [programs.longout]
-command = "/bin/sh -c 'for i in $(seq 1 100); do echo line-$i; done; sleep 300'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 `)
 	waitForState(t, client, "longout", "RUNNING", 5*time.Second)
 	time.Sleep(1 * time.Second)
 
-	// Request only 50 bytes.
 	var buf bytes.Buffer
 	if err := client.Tail("longout", "stdout", 50, &buf); err != nil {
 		t.Fatalf("tail: %v", err)
 	}
-	if buf.Len() > 100 { // Allow some overhead for partial line.
+	if buf.Len() > 100 {
 		t.Fatalf("tail returned %d bytes, expected roughly <= 50", buf.Len())
 	}
 }
@@ -90,9 +98,12 @@ func (b *syncBuf) String() string {
 }
 
 func TestLog_TailFollow(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "streamer.sh", "while true; do echo stream-line; sleep 0.1; done")
+
 	client, _ := startDaemon(t, `
 [programs.streamer]
-command = "/bin/sh -c 'while true; do echo stream-line; sleep 0.1; done'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 `)
@@ -107,7 +118,6 @@ startsecs = 0
 		_ = client.TailFollow(ctx, "streamer", "stdout", &out)
 	}()
 
-	// Wait for some output to appear.
 	deadline := time.After(5 * time.Second)
 	for {
 		if strings.Contains(out.String(), "stream-line") {
@@ -127,10 +137,11 @@ func TestLog_Rotation(t *testing.T) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		t.Fatalf("mkdir logs: %v", err)
 	}
+	script := writeScript(t, dir, "bigwriter.sh", "while true; do dd if=/dev/zero bs=1024 count=1 2>/dev/null | tr '\\0' A; done")
 
 	client, _ := startDaemon(t, `
 [programs.bigwriter]
-command = "/bin/sh -c 'while true; do dd if=/dev/zero bs=1024 count=1 2>/dev/null | tr \"\\0\" A; done'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 stdout_logfile = "`+logDir+`/stdout.log"
@@ -139,7 +150,6 @@ stdout_logfile_backups = 2
 `)
 	waitForState(t, client, "bigwriter", "RUNNING", 5*time.Second)
 
-	// Wait for enough output to trigger rotation.
 	deadline := time.After(15 * time.Second)
 	for {
 		matches, _ := filepath.Glob(filepath.Join(logDir, "stdout.log.*"))
@@ -156,9 +166,13 @@ stdout_logfile_backups = 2
 }
 
 func TestLog_ANSIStrip(t *testing.T) {
+	dir := t.TempDir()
+	script := writeScript(t, dir, "colored.sh", `printf '\033[31mred text\033[0m\n'
+exec sleep 300`)
+
 	client, _ := startDaemon(t, `
 [programs.colored]
-command = "/bin/sh -c 'printf \"\\033[31mred text\\033[0m\\n\"; sleep 300'"
+command = "`+script+`"
 autostart = true
 startsecs = 0
 strip_ansi = true
