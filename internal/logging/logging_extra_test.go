@@ -30,8 +30,8 @@ func TestPipeToWriterBasic(t *testing.T) {
 		close(done)
 	}()
 
-	pw.Write([]byte("hello world\n"))
-	pw.Write([]byte("second line\n"))
+	_, _ = pw.Write([]byte("hello world\n"))
+	_, _ = pw.Write([]byte("second line\n"))
 	pw.Close()
 	<-done
 
@@ -66,7 +66,7 @@ func TestPipeToWriterContainerJSON(t *testing.T) {
 		close(done)
 	}()
 
-	pw.Write([]byte("error message\n"))
+	_, _ = pw.Write([]byte("error message\n"))
 	pw.Close()
 	<-done
 
@@ -145,7 +145,7 @@ func TestReopenAfterDelete(t *testing.T) {
 	defer cw.Close()
 
 	// Write initial data.
-	cw.Write([]byte("before\n"))
+	_, _ = cw.Write([]byte("before\n"))
 
 	// Delete the log file (simulating rotation).
 	os.Remove(logFile)
@@ -156,7 +156,7 @@ func TestReopenAfterDelete(t *testing.T) {
 	}
 
 	// Write after reopen.
-	cw.Write([]byte("after\n"))
+	_, _ = cw.Write([]byte("after\n"))
 
 	data, err := os.ReadFile(logFile)
 	if err != nil {

@@ -150,7 +150,7 @@ func TestValidateSocketPermissionsNoWritePermission(t *testing.T) {
 	if err := os.Mkdir(restricted, 0555); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(restricted, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(restricted, 0755) })
 
 	err := ValidateSocketPermissions(restricted + "/kahi.sock")
 	if err == nil {

@@ -142,7 +142,7 @@ func TestSendToReadyTransitionsToBusy(t *testing.T) {
 	waitForState(t, lp, 0, ListenerReady, 2*time.Second)
 
 	// Drain stdin in background so sendToReady doesn't block.
-	go io.Copy(io.Discard, stdinR)
+	go func() { _, _ = io.Copy(io.Discard, stdinR) }()
 
 	// Send event directly.
 	ts := time.Date(2026, 2, 16, 12, 0, 0, 0, time.UTC)

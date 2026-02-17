@@ -220,14 +220,14 @@ func TestHandleLogReopenWithCaptures(t *testing.T) {
 	}
 	defer cw.Close()
 
-	cw.Write([]byte("before\n"))
+	_, _ = cw.Write([]byte("before\n"))
 
 	s := testSupervisor()
 	s.captures["test-proc:stdout"] = cw
 
 	s.handleLogReopen()
 
-	cw.Write([]byte("after\n"))
+	_, _ = cw.Write([]byte("after\n"))
 
 	data, err := os.ReadFile(logPath)
 	if err != nil {
@@ -241,7 +241,7 @@ func TestHandleLogReopenWithCaptures(t *testing.T) {
 func TestHandleLogReopenWithBadCapture(t *testing.T) {
 	tmpDir := t.TempDir()
 	subdir := filepath.Join(tmpDir, "subdir")
-	os.MkdirAll(subdir, 0755)
+	_ = os.MkdirAll(subdir, 0755)
 	logPath := filepath.Join(subdir, "test.log")
 
 	cw, err := logging.NewCaptureWriter(logging.CaptureConfig{

@@ -228,7 +228,7 @@ func TestSupervisorCheckReadyPending(t *testing.T) {
 }
 
 func TestHandleSignalTerminates(t *testing.T) {
-	s := testSupervisor()
+	var s *Supervisor
 
 	tests := []os.Signal{
 		syscall.SIGTERM,

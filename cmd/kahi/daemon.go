@@ -118,7 +118,7 @@ func daemonRun(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	defer server.Stop(context.Background())
+	defer func() { _ = server.Stop(context.Background()) }()
 
 	// Optional privilege drop (after binding sockets).
 	if userFlag != "" {
