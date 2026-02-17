@@ -3024,7 +3024,12 @@ None specific.
 
 **Dependencies:** TEST-002
 
-#### E2E Test Suite: 11 files, 70 tests, 9 domains
+#### E2E Test Suite: 11 files, 68 tests, 9 domains
+
+**Known Skips (2):**
+
+- `TestDaemon_Daemonize` -- Go runtime cannot safely fork after goroutines start; skipped with `t.Skip`
+- `TestAuth_TCPWithCreds` -- requires TCP port discovery not yet implemented; skipped with `t.Skip`
 
 | File | Coverage area | Tests |
 | --- | --- | --- |
@@ -3167,8 +3172,10 @@ None specific.
 - [ ] `gotestsum` is added to the setup task in Taskfile.yml
 - [ ] `task test-e2e` uses `gotestsum` with `--format testdox` for readable output
 - [ ] `task test` uses `gotestsum` with `--format testdox` for unit tests
+- [ ] `task test-integration` uses `gotestsum` with `--format testdox` for integration tests
+- [ ] `task coverage` uses `gotestsum` with `--format testdox` and `--junitfile` for coverage runs
 - [ ] CI integration workflow produces JUnit XML via `--junitfile results.xml`
-- [ ] GitHub Actions workflow uses a test reporter action to display results in PR checks
+- [ ] GitHub Actions workflow uses `dorny/test-reporter` action to display results in PR checks
 - [ ] Local `task test` and `task test-e2e` show live progress (test name + pass/fail as each completes)
 - [ ] Failing tests show full output inline (not suppressed by formatting)
 

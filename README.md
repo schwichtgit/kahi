@@ -1,4 +1,4 @@
-![logo](kahi_logo.svg)
+![Kahi](assets/kahi_logo.svg)
 # Kahi
 
 A modern process supervisor for POSIX systems, written in Go.
