@@ -100,7 +100,7 @@ func (m *Manager) LoadConfig(cfg *config.Config) {
 			if stdoutCW != nil {
 				cw := stdoutCW
 				opts = append(opts, WithStdoutHandler(func(name string, data []byte) {
-					cw.Write(data)
+					_, _ = cw.Write(data)
 					if bus != nil {
 						bus.Publish(events.Event{
 							Type: events.ProcessLogStdout,
@@ -114,9 +114,9 @@ func (m *Manager) LoadConfig(cfg *config.Config) {
 				redirect := inst.Config.RedirectStderr
 				opts = append(opts, WithStderrHandler(func(name string, data []byte) {
 					if redirect && stdoutCW != nil {
-						stdoutCW.Write(data)
+						_, _ = stdoutCW.Write(data)
 					} else {
-						cw.Write(data)
+						_, _ = cw.Write(data)
 					}
 					if bus != nil {
 						bus.Publish(events.Event{
