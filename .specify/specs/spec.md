@@ -656,6 +656,8 @@ Infrastructure features have NO dependencies. They establish the foundation.
 - Programs not changed in the reload are untouched (processes keep running)
 - Reload during shutdown is ignored
 - Concurrent reload requests are serialized (second waits for first to complete)
+- During config reload of a program, stop/start commands targeting that program are queued and executed after reload completes
+- If reload is rejected due to validation error, any in-flight restart completes and previous config is retained
 
 **Dependencies:** FUNC-012, FUNC-013, FUNC-011
 
@@ -829,7 +831,9 @@ Infrastructure features have NO dependencies. They establish the foundation.
 **Edge Cases:**
 
 - Rotation is atomic (rename, not copy+truncate)
-- Rotation check happens after every write batch
+- Rotation check happens before each write; if adding this write would exceed threshold, rotate first then write
+- If a single write is larger than maxbytes, the write is allowed (do not split writes); rotation happens on the next write
+- Backup file numbering: `.1` -> `.2`, `.2` -> `.3`, etc.; `.N` where N > backup_count is deleted
 - Byte size parsing supports: B, KB, MB, GB suffixes
 
 **Dependencies:** FUNC-018
@@ -1112,6 +1116,9 @@ Infrastructure features have NO dependencies. They establish the foundation.
 
 - SSE includes `X-Accel-Buffering: no` header for nginx reverse proxy compatibility
 - Reconnection: SSE `id` field uses byte offset for log streams, allowing resume
+- If requested byte offset exceeds current file size (e.g., after log rotation), resume from start of current file
+- If `Last-Event-ID` header is absent, start from end-of-file minus configured tail bytes
+- If offset is invalid (non-numeric), return HTTP 400 with `{"error": "invalid resume position: {offset}"}`
 - Multiple clients can stream the same log simultaneously
 - When no log file is configured, SSE streams from the in-memory ring buffer (FUNC-082)
 
@@ -1213,7 +1220,9 @@ Infrastructure features have NO dependencies. They establish the foundation.
 **Edge Cases:**
 
 - /readyz does not require authentication
-- FATAL processes count as "stabilized" (the system has settled, even if unhealthy)
+- A process is "ready" if in RUNNING state; FATAL counts as "stabilized" but not healthy
+- STOPPED and EXITED processes are not ready
+- If `?process=` list is empty or missing, check all autostart processes
 - Processes with autostart=false are excluded from default readiness check
 
 **Dependencies:** FUNC-029
@@ -2002,7 +2011,7 @@ Infrastructure features have NO dependencies. They establish the foundation.
 | Error Condition | Expected Behavior | User-Facing Message |
 | --- | --- | --- |
 | Listener crashes | Restart per autorestart policy | "event listener {name} exited unexpectedly" |
-| Buffer overflow | Oldest event dropped | "event buffer overflow for {name}, dropping oldest event" |
+| Buffer overflow | Oldest queued (not in-flight) event dropped, logged at WARN level | "event buffer overflow for {name}, dropping oldest event" |
 | Invalid result format | Log error, re-queue event | "invalid result from listener {name}: {data}" |
 
 **Edge Cases:**
@@ -2010,6 +2019,9 @@ Infrastructure features have NO dependencies. They establish the foundation.
 - Multiple listener instances in a pool; events dispatched round-robin to READY listeners
 - Listener pool with numprocs=3 has 3 listener processes
 - Event envelope format: `ver:3.0 server:kahi serial:{n} pool:{pool} poolserial:{n} eventname:{type} len:{n}\n{payload}`
+- Listener response format: `RESULT {len}\n{payload}` where len is byte length of payload; payload "OK" = success, "FAIL" = re-queue
+- If response parsing fails or payload is unrecognized, log error and re-queue event for retry
+- Buffer overflow dropped events are counted via `kahi_event_buffer_drops_total{pool=listener_name}` metric
 
 **Dependencies:** FUNC-049, FUNC-050, FUNC-002
 
@@ -2037,9 +2049,10 @@ Infrastructure features have NO dependencies. They establish the foundation.
 
 | Error Condition | Expected Behavior | User-Facing Message |
 | --- | --- | --- |
-| Webhook POST fails (timeout/5xx) | Retry up to configured max_retries (default: 3) with exponential backoff | "webhook delivery failed for {url}: {error}, retrying" |
+| Webhook POST fails (timeout/5xx) | Retry up to max_retries (default: 3) with exponential backoff: `delay = min(1s * 2^attempt, 60s)` + random jitter of +/-10% | "webhook delivery failed for {url}: {error}, retrying" |
 | All retries exhausted | Log error, move on | "webhook delivery failed permanently for {url}" |
 | Webhook URL unreachable | Circuit breaker opens after 5 consecutive failures | "webhook circuit breaker open for {url}" |
+| Circuit breaker open | Attempt one probe request every 5 minutes; if probe succeeds, reset failure counter and close breaker | "webhook circuit breaker closed for {url}" |
 
 **Edge Cases:**
 
@@ -2047,6 +2060,8 @@ Infrastructure features have NO dependencies. They establish the foundation.
 - Webhook timeout default is 5 seconds
 - Multiple webhooks can subscribe to the same event
 - Webhook failures do not affect process management
+- Circuit breaker state transitions logged at INFO level
+- Expose `kahi_webhook_circuit_breaker{url,status=open|closed}` gauge metric
 
 **Dependencies:** FUNC-049
 
@@ -2359,8 +2374,11 @@ Infrastructure features have NO dependencies. They establish the foundation.
 
 **Edge Cases:**
 
-- Shutdown timeout is configurable (default: 30 seconds total)
-- If total shutdown exceeds the timeout, remaining processes are killed and daemon exits
+- Shutdown timeout is configurable (default: 30 seconds total); clock starts after SIGTERM is sent to all processes
+- Per-process stopwaitsecs is respected if it fits within the remaining global timeout
+- If total shutdown timeout expires, all remaining processes receive SIGKILL immediately
+- Processes in STARTING state transition to STOPPED immediately on shutdown (no stopwaitsecs wait)
+- If a process ignores SIGKILL after 5 seconds, log error and exit anyway
 
 **Dependencies:** FUNC-003, FUNC-008
 
@@ -2956,6 +2974,21 @@ None specific.
 
 **Architecture:** True black-box testing. `TestMain` builds the binary to a temp directory. Each test creates an isolated temp directory for socket + config, polls for readiness (socket existence -> health endpoint -> process state), and cleans up via shutdown then kill-if-needed.
 
+**Timeouts and Polling:**
+
+- Readiness polling stages: socket existence (5s, 100ms interval), health endpoint (3s, 50ms interval), process state (5s, 50ms interval)
+- Cumulative readiness polling shall not exceed 30s before test failure
+- Each E2E test sets a `context.WithTimeout` of 60s covering startup, execution, and cleanup
+- `TestMain` sets a suite-wide timeout of 10 minutes as fallback
+- `waitForState` polls at 50ms intervals; on timeout calls `t.Fatal()` with: "timeout waiting for process {name} to reach {state}; last state was {observed}"
+
+**Cleanup Escalation:**
+
+- Test cleanup sends shutdown command with 5s timeout
+- If daemon process is still alive after 5s, send SIGKILL with 2s timeout
+- If SIGKILL timeout expires, log warning and continue (do not block other test cleanup)
+- Socket file and temp directory are always cleaned up via `t.Cleanup`
+
 **Acceptance Criteria:**
 
 - [ ] E2E tests start a real Kahi daemon, configure real programs (e.g., `sleep`, `echo`)
@@ -2968,7 +3001,7 @@ None specific.
 
 **Dependencies:** TEST-002
 
-#### E2E Test Suite: 11 files, 56 tests, 9 domains
+#### E2E Test Suite: 11 files, 70 tests, 9 domains
 
 | File | Coverage area | Tests |
 | --- | --- | --- |
@@ -2987,7 +3020,7 @@ None specific.
 #### Shared Helpers (`e2e/helpers_test.go`)
 
 - `startDaemon(t, config string) (*ctl.Client, func())` -- Writes config to temp dir, starts daemon subprocess, polls until healthy, returns client and cleanup function.
-- `waitForState(t, client, name, state string, timeout time.Duration)` -- Polls process state until condition met or test fails.
+- `waitForState(t, client, name, state string, timeout time.Duration)` -- Polls process state at 50ms intervals until condition met; calls `t.Fatal("timeout waiting for process {name} to reach {state}; last state was {observed}")` on expiry.
 - `getProcessInfo(t, client, name string) ProcessInfo` -- Fetches current process status via client.
 
 #### File-by-File Test Inventory
@@ -3107,11 +3140,13 @@ None specific.
 ### Performance
 
 - Daemon startup time (cold start, no processes): < 100ms
-- Process start latency (time from API call to child exec): < 50ms
+- Process start latency (time from API request received to child process begins execution, post-fork before exec): < 50ms
 - API response time for status query (100 processes): < 10ms
 - Memory overhead per managed process: < 1MB
 - SSE streaming latency (log line to client): < 100ms
 - Config reload time (100 program definitions): < 500ms
+
+**Measurement methodology:** All latency thresholds are 99th percentile, measured on an idle system. Performance tests run 100 iterations, report mean/median/p99. Test fails if p99 exceeds threshold, reporting measured values.
 
 ### Security
 

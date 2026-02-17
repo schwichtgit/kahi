@@ -63,9 +63,13 @@ func ExpandVariables(cfg *Config, configPath string) error {
 		if err != nil {
 			return fmt.Errorf("programs.%s.stderr_logfile: %w", name, err)
 		}
-		p.ProcessName, err = expandString(p.ProcessName, pCtx)
-		if err != nil {
-			return fmt.Errorf("programs.%s.process_name: %w", name, err)
+		// Skip ProcessName expansion when numprocs > 1: the %(process_num)d
+		// template must be preserved for per-instance expansion in ExpandNumprocs.
+		if p.Numprocs <= 1 {
+			p.ProcessName, err = expandString(p.ProcessName, pCtx)
+			if err != nil {
+				return fmt.Errorf("programs.%s.process_name: %w", name, err)
+			}
 		}
 		p.User, err = expandString(p.User, pCtx)
 		if err != nil {

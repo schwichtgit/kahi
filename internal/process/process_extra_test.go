@@ -22,7 +22,7 @@ func TestHandleExitFromStarting(t *testing.T) {
 	_ = p.Start()
 
 	// Process is in Starting state; HandleExit should transition to Backoff.
-	p.HandleExit(nil)
+	p.HandleExit(0)
 	time.Sleep(10 * time.Millisecond)
 
 	state := p.State()
@@ -54,7 +54,7 @@ func TestHandleExitFromStopping(t *testing.T) {
 	spawnCount := len(spawner.SpawnCalls)
 
 	// HandleExit from Stopping state should go to Stopped, not restart.
-	p.HandleExit(nil)
+	p.HandleExit(0)
 	time.Sleep(50 * time.Millisecond)
 
 	if p.State() != Stopped {
@@ -96,7 +96,7 @@ func TestUptimeZeroAfterExit(t *testing.T) {
 	_ = p.Start()
 	time.Sleep(10 * time.Millisecond)
 
-	p.HandleExit(nil)
+	p.HandleExit(0)
 	time.Sleep(10 * time.Millisecond)
 
 	if p.Uptime() != 0 {
@@ -159,9 +159,9 @@ func TestShouldRestartUnexpectedWithNonMatchingCode(t *testing.T) {
 	_ = p.Start()
 	time.Sleep(10 * time.Millisecond)
 
-	// HandleExit(nil) yields exit code 0, which is not in exitcodes [2],
+	// HandleExit(0) yields exit code 0, which is not in exitcodes [2],
 	// so autorestart="unexpected" should trigger a restart.
-	p.HandleExit(nil)
+	p.HandleExit(0)
 	time.Sleep(200 * time.Millisecond)
 
 	mu.Lock()
@@ -414,7 +414,7 @@ func TestManagerRestartRunning(t *testing.T) {
 		t.Fatal("no processes")
 	}
 	_ = procs[0].Stop()
-	procs[0].HandleExit(nil) // Simulate supervisor reap.
+	procs[0].HandleExit(0) // Simulate supervisor reap.
 	time.Sleep(10 * time.Millisecond)
 
 	// Now restart from stopped state.
@@ -476,7 +476,7 @@ func TestProcessExitCode(t *testing.T) {
 	_ = p.Start()
 	time.Sleep(10 * time.Millisecond)
 
-	p.HandleExit(nil)
+	p.HandleExit(0)
 
 	if p.ExitCode() != 0 {
 		t.Fatalf("ExitCode = %d, want 0", p.ExitCode())
@@ -515,7 +515,7 @@ func TestRestartAfterExitSpawnFailure(t *testing.T) {
 	_ = p.Start()
 	time.Sleep(10 * time.Millisecond)
 
-	p.HandleExit(nil)
+	p.HandleExit(0)
 	time.Sleep(100 * time.Millisecond)
 
 	state := p.State()

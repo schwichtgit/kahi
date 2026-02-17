@@ -91,7 +91,7 @@ tasks:
   test-e2e:
     desc: Run end-to-end tests
     cmds:
-      - go test -race -count=1 -tags=e2e ./...
+      - go test -race -count=1 -timeout=15m -tags=e2e ./...
 
   setup:
     desc: Install development tools

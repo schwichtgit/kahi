@@ -1729,20 +1729,25 @@
       "id": "e2e-test-infrastructure",
       "category": "testing",
       "title": "End-to-End Test Infrastructure",
-      "description": "E2E tests that exercise the full system with real processes (sleep, echo), verifying process lifecycle, API responses, and CLI output.",
+      "description": "Black-box E2E tests across 11 files and 70 tests. Builds real kahi binary, starts as subprocess, communicates via ctl.NewUnixClient. Covers 9 domains: daemon lifecycle, process control, state machine, groups, config reload, logging, stdin/attach, environment, auth, and supervisord regressions.",
       "testing_steps": [
-        "Verify E2E tests are tagged with //go:build e2e",
-        "Run 'task test-e2e' and verify E2E tests run with the correct build tag",
-        "Write an E2E test that starts a real Kahi daemon, configures real programs (sleep, echo), and verifies process start",
-        "Write an E2E test that verifies process stop, restart, and autorestart behavior with real processes",
-        "Write an E2E test that verifies API endpoints return correct status for running processes",
-        "Write an E2E test that verifies CLI commands produce expected output strings",
-        "Verify all E2E tests run in isolated temp directories",
-        "Verify E2E tests have a configurable timeout to prevent hanging on failures",
-        "Write an E2E test that verifies graceful shutdown stops all processes and exits with code 0",
-        "Write an E2E test that verifies config hot reload adds and removes processes correctly"
+        "Verify e2e/helpers_test.go contains TestMain that builds the kahi binary to a temp directory",
+        "Verify startDaemon helper writes config, starts daemon, polls readiness (socket 5s, health 3s, state 5s), returns client and cleanup",
+        "Verify waitForState polls at 50ms intervals and calls t.Fatal with observed state on timeout",
+        "Verify all E2E test files use //go:build e2e tag and run via 'task test-e2e'",
+        "Verify e2e/daemon_lifecycle_test.go contains 8 tests: Health, Version, PID, Ready, Shutdown, ShutdownTimeout, Daemonize, PIDFile",
+        "Verify e2e/process_ctl_test.go contains 15 tests covering start/stop/restart/status/signal and error paths (bad name, already running, start fails, stopwaitsecs, stopsignal, startretries, startsecs)",
+        "Verify e2e/process_state_test.go contains 10 tests: autorestart modes (true/false/unexpected), backoff-to-fatal, expected/unexpected exit codes, killed-during-backoff, concurrent start/stop, numprocs expansion, priority ordering",
+        "Verify e2e/group_ctl_test.go contains 6 tests: group start/stop/restart all, start single, priority order, heterogeneous groups",
+        "Verify e2e/config_reload_test.go contains 6 tests: add/remove/change program, reread preview, no-change reload, invalid config rejection",
+        "Verify e2e/logging_test.go contains 6 tests: tail stdout/stderr, tail bytes, tail follow (SSE), log rotation, ANSI stripping",
+        "Verify e2e/stdin_attach_test.go contains 3 tests: write stdin, write to stopped process error, attach bidirectional",
+        "Verify e2e/env_test.go contains 5 tests: env passthrough, clean_environment, program overrides global, %(program_name)s/%(process_num)d expansion, %(here)s expansion",
+        "Verify e2e/auth_test.go contains 3 tests: TCP with valid creds, TCP no creds returns 401, TCP bad creds returns 401",
+        "Verify e2e/regression_test.go contains 8 tests ported from supervisord: Unicode tail, invalid UTF-8, literal %, kahi init, help flag, piped tail, numprocs names, redirect_stderr",
+        "Run 'task test-e2e' and verify all 70 E2E tests pass with race detector enabled"
       ],
-      "passes": true,
+      "passes": false,
       "dependencies": [
         "integration-test-infrastructure"
       ]

@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	"github.com/kahidev/kahi/internal/events"
 	"github.com/kahidev/kahi/internal/logging"
 	"github.com/kahidev/kahi/internal/process"
+	"github.com/kahidev/kahi/internal/version"
 )
 
 // Supervisor is the main daemon run loop.
@@ -238,7 +240,7 @@ func (s *Supervisor) handleSigchld() {
 		}
 
 		s.logger.Debug("reaped child", "pid", pid, "process", p.Name(), "status", status)
-		p.HandleExit(nil) // Status is conveyed through the exit code.
+		p.HandleExit(status)
 	}
 }
 
@@ -345,7 +347,10 @@ func (s *Supervisor) CheckReady(processes []string) (bool, []string, error) {
 // Version returns version info.
 func (s *Supervisor) Version() map[string]string {
 	return map[string]string{
-		"version": "dev",
+		"version": version.Version,
+		"commit":  version.Commit,
+		"date":    version.Date,
+		"pid":     fmt.Sprintf("%d", os.Getpid()),
 	}
 }
 

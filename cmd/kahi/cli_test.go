@@ -188,10 +188,17 @@ func TestCompletionPowershell(t *testing.T) {
 	}
 }
 
+func resetInitFlags() {
+	initOutput = ""
+	initStdout = false
+	initForce = false
+}
+
 func TestInitCommandStdout(t *testing.T) {
+	resetInitFlags()
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
-	rootCmd.SetArgs([]string{"init"})
+	rootCmd.SetArgs([]string{"init", "--stdout"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -201,6 +208,7 @@ func TestInitCommandStdout(t *testing.T) {
 }
 
 func TestInitCommandWriteFile(t *testing.T) {
+	resetInitFlags()
 	dir := t.TempDir()
 	out := filepath.Join(dir, "kahi.toml")
 
@@ -221,6 +229,7 @@ func TestInitCommandWriteFile(t *testing.T) {
 }
 
 func TestInitCommandNoOverwrite(t *testing.T) {
+	resetInitFlags()
 	dir := t.TempDir()
 	out := filepath.Join(dir, "kahi.toml")
 	if err := os.WriteFile(out, []byte("existing"), 0644); err != nil {
@@ -238,6 +247,7 @@ func TestInitCommandNoOverwrite(t *testing.T) {
 }
 
 func TestInitCommandForceOverwrite(t *testing.T) {
+	resetInitFlags()
 	dir := t.TempDir()
 	out := filepath.Join(dir, "kahi.toml")
 	if err := os.WriteFile(out, []byte("existing"), 0644); err != nil {

@@ -18,6 +18,8 @@ type CaptureConfig struct {
 	Logfile        string // path, empty for container mode
 	RedirectStderr bool
 	StripAnsi      bool
+	MaxBytes       string // max file size before rotation (e.g. "10KB")
+	Backups        int    // number of rotated backup files to keep
 	Logger         *slog.Logger
 }
 
@@ -68,6 +70,7 @@ func (cw *CaptureWriter) Write(p []byte) (int, error) {
 				cw.config.Logger.Error("log write failed", "file", cw.config.Logfile, "error", err)
 			}
 		}
+		cw.rotateIfNeeded()
 	}
 
 	// Call handlers.
@@ -98,6 +101,32 @@ func (cw *CaptureWriter) Close() error {
 		return cw.file.Close()
 	}
 	return nil
+}
+
+// rotateIfNeeded checks if the log file exceeds MaxBytes and rotates it.
+// Must be called with mu held.
+func (cw *CaptureWriter) rotateIfNeeded() {
+	if cw.file == nil || cw.config.MaxBytes == "" {
+		return
+	}
+	maxBytes := ParseSize(cw.config.MaxBytes)
+	if maxBytes == 0 {
+		return
+	}
+	info, err := cw.file.Stat()
+	if err != nil || info.Size() < maxBytes {
+		return
+	}
+	// Close current file before rotating.
+	cw.file.Close()
+	_ = rotateFile(cw.config.Logfile, cw.config.Backups)
+	// Reopen a fresh file.
+	f, err := os.OpenFile(cw.config.Logfile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		cw.file = nil
+		return
+	}
+	cw.file = f
 }
 
 // Reopen closes and reopens the log file (for log rotation tools).

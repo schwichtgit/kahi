@@ -29,6 +29,7 @@ type Process struct {
 	bus        *events.Bus
 	logger     *slog.Logger
 	stopCh     chan struct{} // signals the stop-wait goroutine
+	killDoneCh chan struct{} // closed when process exits, cancels SIGKILL timer
 	shutdownCh chan struct{} // closed on daemon shutdown
 	onStdout   func(name string, data []byte)
 	onStderr   func(name string, data []byte)
@@ -144,7 +145,12 @@ func (p *Process) startLocked() error {
 	}
 
 	p.publishStateLocked(Starting)
+	return p.spawnLocked()
+}
 
+// spawnLocked does the actual spawn without state transitions.
+// Called by startLocked (after RequestStart) and retryAfterBackoff (after RetryFromBackoff).
+func (p *Process) spawnLocked() error {
 	env := p.buildEnv()
 	cmd, args := p.parseCommand()
 
@@ -165,10 +171,17 @@ func (p *Process) startLocked() error {
 	if err != nil {
 		p.logger.Error("spawn failed", "error", err)
 		// Transition to backoff or fatal.
-		if _, fErr := p.sm.ProcessExitedEarly(); fErr != nil {
+		newState, fErr := p.sm.ProcessExitedEarly()
+		if fErr != nil {
 			p.logger.Error("state transition failed", "error", fErr)
 		}
 		p.publishStateLocked(p.sm.State())
+
+		// If in backoff, schedule a retry (HandleExit won't fire since no child was created).
+		if newState == Backoff {
+			go p.retryAfterBackoff(p.stopCh)
+		}
+
 		return fmt.Errorf("process %s: spawn failed: %w", p.name, err)
 	}
 
@@ -176,16 +189,34 @@ func (p *Process) startLocked() error {
 	p.startedAt = time.Now()
 	p.logger.Info("started", "pid", spawned.Pid())
 
-	// Start pipe readers.
+	// Start pipe readers (check pipe non-nil for mock spawners).
 	if p.onStdout != nil {
-		go p.readPipe(spawned.StdoutPipe(), "stdout", p.onStdout)
+		if pipe := spawned.StdoutPipe(); pipe != nil {
+			go p.readPipe(pipe, "stdout", p.onStdout)
+		}
+		// When redirect_stderr=true, route stderr through the stdout handler.
+		if p.config.RedirectStderr {
+			if pipe := spawned.StderrPipe(); pipe != nil {
+				go p.readPipe(pipe, "stderr", p.onStdout)
+			}
+		}
 	}
 	if p.onStderr != nil && !p.config.RedirectStderr {
-		go p.readPipe(spawned.StderrPipe(), "stderr", p.onStderr)
+		if pipe := spawned.StderrPipe(); pipe != nil {
+			go p.readPipe(pipe, "stderr", p.onStderr)
+		}
 	}
 
-	// Start the watcher goroutine for startsecs transition.
-	go p.watchStart(p.stopCh)
+	// For startsecs=0, transition to RUNNING synchronously to avoid a race
+	// where SIGCHLD arrives before the watchStart goroutine runs.
+	if p.config.Startsecs == 0 {
+		if _, err := p.sm.ProcessStarted(); err != nil {
+			p.logger.Error("state transition failed", "error", err)
+		}
+		p.publishStateLocked(p.sm.State())
+	} else {
+		go p.watchStart(p.stopCh)
+	}
 
 	return nil
 }
@@ -224,6 +255,22 @@ func (p *Process) Stop() error {
 
 func (p *Process) stopLocked() error {
 	state := p.sm.State()
+
+	// Allow stopping from Backoff: cancel pending retry and go to STOPPED.
+	if state == Backoff {
+		if err := p.sm.Transition(Stopped); err != nil {
+			return fmt.Errorf("process %s: %w", p.name, err)
+		}
+		p.publishStateLocked(Stopped)
+		select {
+		case <-p.stopCh:
+		default:
+			close(p.stopCh)
+		}
+		p.stopCh = make(chan struct{})
+		return nil
+	}
+
 	if state != Running && state != Starting {
 		return fmt.Errorf("process %s: not running", p.name)
 	}
@@ -234,7 +281,7 @@ func (p *Process) stopLocked() error {
 
 	p.publishStateLocked(Stopping)
 
-	// Close stop channel to signal watchers.
+	// Close stop channel to signal watchers (watchStart, retryAfterBackoff).
 	select {
 	case <-p.stopCh:
 	default:
@@ -251,8 +298,11 @@ func (p *Process) stopLocked() error {
 		}
 	}
 
-	// Start the kill escalation timer.
-	go p.watchStop(p.stopCh)
+	// Start the kill escalation timer with a dedicated channel
+	// (stopCh is already closed and can't be reused).
+	killDone := make(chan struct{})
+	p.killDoneCh = killDone
+	go p.watchStop(killDone)
 
 	return nil
 }
@@ -314,21 +364,11 @@ func (p *Process) WriteStdin(data []byte) error {
 	return err
 }
 
-// HandleExit processes the exit of a child process.
-func (p *Process) HandleExit(status *os.ProcessState) {
+// HandleExit processes the exit of a child process with the given exit code.
+func (p *Process) HandleExit(exitCode int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	exitCode := 0
-	if status != nil {
-		exitCode = status.ExitCode()
-		if exitCode < 0 {
-			// Killed by signal.
-			if ws, ok := status.Sys().(syscall.WaitStatus); ok {
-				exitCode = 128 + int(ws.Signal())
-			}
-		}
-	}
 	p.exitCode = exitCode
 	p.logger.Info("exited", "exit_code", exitCode)
 
@@ -364,6 +404,12 @@ func (p *Process) HandleExit(status *os.ProcessState) {
 		p.publishStateLocked(Stopped)
 	default:
 		p.logger.Warn("unexpected exit in state", "state", state.String())
+	}
+
+	// Cancel the SIGKILL escalation timer if running.
+	if p.killDoneCh != nil {
+		close(p.killDoneCh)
+		p.killDoneCh = nil
 	}
 
 	// Reset spawned reference.
@@ -422,7 +468,7 @@ func (p *Process) retryAfterBackoff(stopCh <-chan struct{}) {
 			return
 		}
 		p.publishStateLocked(Starting)
-		if err := p.startLocked(); err != nil {
+		if err := p.spawnLocked(); err != nil {
 			p.logger.Error("retry start failed", "error", err)
 		}
 		p.mu.Unlock()
@@ -440,50 +486,9 @@ func (p *Process) restartAfterExit() {
 	}
 
 	p.logger.Info("autorestarting")
-	// Transition Exited -> Starting.
-	if err := p.sm.RequestStart(); err != nil {
-		p.logger.Error("restart transition failed", "error", err)
-		return
+	if err := p.startLocked(); err != nil {
+		p.logger.Error("restart failed", "error", err)
 	}
-	p.publishStateLocked(Starting)
-
-	env := p.buildEnv()
-	cmd, args := p.parseCommand()
-
-	spawnCfg := SpawnConfig{
-		Command: cmd,
-		Args:    args,
-		Dir:     p.config.Directory,
-		Env:     env,
-	}
-
-	rlimits := ParseRLimits(p.config)
-	if len(rlimits) > 0 {
-		spawnCfg.RLimits = rlimits
-	}
-
-	spawned, err := p.spawner.Spawn(spawnCfg)
-	if err != nil {
-		p.logger.Error("restart spawn failed", "error", err)
-		if _, fErr := p.sm.ProcessExitedEarly(); fErr != nil {
-			p.logger.Error("state transition failed", "error", fErr)
-		}
-		p.publishStateLocked(p.sm.State())
-		return
-	}
-
-	p.spawned = spawned
-	p.startedAt = time.Now()
-	p.logger.Info("restarted", "pid", spawned.Pid())
-
-	if p.onStdout != nil {
-		go p.readPipe(spawned.StdoutPipe(), "stdout", p.onStdout)
-	}
-	if p.onStderr != nil && !p.config.RedirectStderr {
-		go p.readPipe(spawned.StderrPipe(), "stderr", p.onStderr)
-	}
-
-	go p.watchStart(p.stopCh)
 }
 
 func (p *Process) buildEnv() []string {

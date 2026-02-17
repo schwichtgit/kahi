@@ -5,10 +5,12 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/kahidev/kahi/internal/api"
 	"github.com/kahidev/kahi/internal/config"
 	"github.com/kahidev/kahi/internal/events"
+	"github.com/kahidev/kahi/internal/logging"
 )
 
 // Manager manages all processes and groups. It implements api.ProcessManager
@@ -17,6 +19,7 @@ type Manager struct {
 	mu         sync.RWMutex
 	processes  map[string]*Process
 	groups     map[string]*Group
+	captures   map[string]*logging.CaptureWriter
 	bus        *events.Bus
 	logger     *slog.Logger
 	spawner    ProcessSpawner
@@ -35,6 +38,7 @@ func NewManager(spawner ProcessSpawner, bus *events.Bus, logger *slog.Logger) *M
 	return &Manager{
 		processes:  make(map[string]*Process),
 		groups:     make(map[string]*Group),
+		captures:   make(map[string]*logging.CaptureWriter),
 		bus:        bus,
 		logger:     logger,
 		spawner:    spawner,
@@ -58,10 +62,75 @@ func (m *Manager) LoadConfig(cfg *config.Config) {
 			if _, exists := m.processes[inst.Name]; exists {
 				continue
 			}
+
+			// Create capture writers for stdout (and stderr if not redirected).
+			stdoutCW, err := logging.NewCaptureWriter(logging.CaptureConfig{
+				ProcessName: inst.Name,
+				Stream:      "stdout",
+				Logfile:     inst.Config.StdoutLogfile,
+				StripAnsi:   inst.Config.StripAnsi,
+				MaxBytes:    inst.Config.StdoutLogfileMaxbytes,
+				Backups:     inst.Config.StdoutLogfileBackups,
+				Logger:      m.logger,
+			})
+			if err != nil {
+				m.logger.Error("create stdout capture", "process", inst.Name, "error", err)
+			}
+			m.captures[inst.Name+":stdout"] = stdoutCW
+
+			var stderrCW *logging.CaptureWriter
+			if !inst.Config.RedirectStderr {
+				stderrCW, err = logging.NewCaptureWriter(logging.CaptureConfig{
+					ProcessName: inst.Name,
+					Stream:      "stderr",
+					Logfile:     inst.Config.StderrLogfile,
+					StripAnsi:   inst.Config.StripAnsi,
+					MaxBytes:    inst.Config.StderrLogfileMaxbytes,
+					Backups:     inst.Config.StderrLogfileBackups,
+					Logger:      m.logger,
+				})
+				if err != nil {
+					m.logger.Error("create stderr capture", "process", inst.Name, "error", err)
+				}
+				m.captures[inst.Name+":stderr"] = stderrCW
+			}
+
+			bus := m.bus
+			opts := []ProcessOption{WithShutdownCh(m.shutdownCh)}
+			if stdoutCW != nil {
+				cw := stdoutCW
+				opts = append(opts, WithStdoutHandler(func(name string, data []byte) {
+					_, _ = cw.Write(data)
+					if bus != nil {
+						bus.Publish(events.Event{
+							Type: events.ProcessLogStdout,
+							Data: map[string]string{"name": name, "data": string(data)},
+						})
+					}
+				}))
+			}
+			if stderrCW != nil {
+				cw := stderrCW
+				redirect := inst.Config.RedirectStderr
+				opts = append(opts, WithStderrHandler(func(name string, data []byte) {
+					if redirect && stdoutCW != nil {
+						_, _ = stdoutCW.Write(data)
+					} else {
+						_, _ = cw.Write(data)
+					}
+					if bus != nil {
+						bus.Publish(events.Event{
+							Type: events.ProcessLogStderr,
+							Data: map[string]string{"name": name, "data": string(data)},
+						})
+					}
+				}))
+			}
+
 			p := NewProcess(
 				inst.Name, inst.Group, inst.Config,
 				m.spawner, m.bus, m.logger,
-				WithShutdownCh(m.shutdownCh),
+				opts...,
 			)
 			m.processes[inst.Name] = p
 			procNames = append(procNames, inst.Name)
@@ -103,8 +172,13 @@ type ProcessInstance struct {
 // ExpandNumprocs expands a program config with numprocs > 1 into individual instances.
 func ExpandNumprocs(progName string, cfg config.ProgramConfig) []ProcessInstance {
 	if cfg.Numprocs <= 1 {
+		name := progName
+		// Use expanded ProcessName if set and different from the program key.
+		if cfg.ProcessName != "" && cfg.ProcessName != progName {
+			name = cfg.ProcessName
+		}
 		return []ProcessInstance{{
-			Name:   progName,
+			Name:   name,
 			Group:  progName,
 			Config: cfg,
 		}}
@@ -397,8 +471,25 @@ func (m *Manager) Restart(name string) error {
 		if err := p.Stop(); err != nil {
 			return err
 		}
+		m.waitForStopped(p, 30*time.Second)
 	}
 	return p.Start()
+}
+
+// waitForStopped polls until the process reaches a terminal state.
+func (m *Manager) waitForStopped(p *Process, timeout time.Duration) {
+	deadline := time.After(timeout)
+	for {
+		state := p.State()
+		if state == Stopped || state == Exited || state == Fatal {
+			return
+		}
+		select {
+		case <-deadline:
+			return
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }
 
 // Signal sends a signal to a process.
@@ -419,14 +510,20 @@ func (m *Manager) WriteStdin(name string, data []byte) error {
 	return p.WriteStdin(data)
 }
 
-// ReadLog reads from process log (placeholder for ring buffer/file).
+// ReadLog reads from process log ring buffer.
 func (m *Manager) ReadLog(name string, stream string, offset int64, length int) ([]byte, error) {
 	_, err := m.GetProcess(name)
 	if err != nil {
 		return nil, err
 	}
-	// Log reading will be implemented with ring buffer/file capture.
-	return []byte{}, nil
+
+	m.mu.RLock()
+	cw, ok := m.captures[name+":"+stream]
+	m.mu.RUnlock()
+	if !ok || cw == nil {
+		return []byte{}, nil
+	}
+	return cw.ReadTail(length), nil
 }
 
 // --- api.GroupManager implementation ---
@@ -489,6 +586,21 @@ func (m *Manager) RestartGroup(name string) error {
 	if err := m.StopGroup(name); err != nil {
 		return err
 	}
+
+	// Wait for all group processes to reach a terminal state.
+	m.mu.RLock()
+	g, ok := m.groups[name]
+	if ok {
+		for _, pName := range g.Processes {
+			if p, exists := m.processes[pName]; exists {
+				m.mu.RUnlock()
+				m.waitForStopped(p, 30*time.Second)
+				m.mu.RLock()
+			}
+		}
+	}
+	m.mu.RUnlock()
+
 	return m.StartGroup(name)
 }
 
