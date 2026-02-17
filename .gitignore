@@ -2,6 +2,7 @@
 /bin/
 /dist/
 /kahi
+cover.out
 coverage.out
 .task/
 

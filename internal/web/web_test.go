@@ -348,3 +348,67 @@ func TestFormatUptime(t *testing.T) {
 		}
 	}
 }
+
+func TestHandleIndexNonRootPath(t *testing.T) {
+	h := newTestHandler(t, &mockLister{})
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/other", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != 404 {
+		t.Fatalf("status = %d, want 404", w.Result().StatusCode)
+	}
+}
+
+func TestStaticETagCacheHit(t *testing.T) {
+	h := newTestHandler(t, &mockLister{})
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	// First request to capture the ETag.
+	req1 := httptest.NewRequest("GET", "/static/app.js", nil)
+	w1 := httptest.NewRecorder()
+	mux.ServeHTTP(w1, req1)
+
+	etag := w1.Result().Header.Get("ETag")
+	if etag == "" {
+		t.Fatal("missing ETag header on first request")
+	}
+
+	// Second request with If-None-Match should return 304.
+	req2 := httptest.NewRequest("GET", "/static/app.js", nil)
+	req2.Header.Set("If-None-Match", etag)
+	w2 := httptest.NewRecorder()
+	mux.ServeHTTP(w2, req2)
+
+	if w2.Result().StatusCode != 304 {
+		t.Fatalf("status = %d, want 304", w2.Result().StatusCode)
+	}
+}
+
+func TestStaticCustomDir(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/test.css", []byte("body{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	h, err := NewHandler(&mockLister{}, Config{StaticDir: dir}, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/static/test.css", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != 200 {
+		t.Fatalf("status = %d, want 200", w.Result().StatusCode)
+	}
+}

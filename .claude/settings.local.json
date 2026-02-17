@@ -1,13 +1,16 @@
 {
-  "model": "opus",
   "permissions": {
     "allow": [
       "Bash(wc:*)",
       "Bash(python3:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(go doc:*)",
+      "Bash(go run:*)",
+      "Bash(1:*)"
     ],
     "env": {
       "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
     }
-  }
+  },
+  "model": "opus"
 }

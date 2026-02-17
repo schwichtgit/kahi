@@ -1,0 +1,19 @@
+# Minimal example config for smoke-testing `kahi daemon`.
+
+[supervisor]
+log_level = "info"
+log_format = "text"
+shutdown_timeout = 5
+
+[server.unix]
+file = "/tmp/kahi-example.sock"
+chmod = "0700"
+
+[server.http]
+enabled = false
+
+[programs.echo]
+command = "/bin/echo hello"
+autostart = true
+autorestart = "false"
+startsecs = 0
