@@ -21,7 +21,9 @@ func TestCaptureWriterToFile(t *testing.T) {
 	}
 	defer cw.Close()
 
-	cw.Write([]byte("hello world\n"))
+	if _, err := cw.Write([]byte("hello world\n")); err != nil {
+		t.Fatal(err)
+	}
 
 	data, err := os.ReadFile(logPath)
 	if err != nil {
@@ -47,7 +49,9 @@ func TestCaptureWriterStripAnsi(t *testing.T) {
 	}
 	defer cw.Close()
 
-	cw.Write([]byte("\033[31mERROR\033[0m: something failed\n"))
+	if _, err := cw.Write([]byte("\033[31mERROR\033[0m: something failed\n")); err != nil {
+		t.Fatal(err)
+	}
 
 	data, err := os.ReadFile(logPath)
 	if err != nil {
@@ -71,8 +75,12 @@ func TestCaptureWriterRingBuffer(t *testing.T) {
 	}
 	defer cw.Close()
 
-	cw.Write([]byte("line 1\n"))
-	cw.Write([]byte("line 2\n"))
+	if _, err := cw.Write([]byte("line 1\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cw.Write([]byte("line 2\n")); err != nil {
+		t.Fatal(err)
+	}
 
 	tail := cw.ReadTail(100)
 	if !strings.Contains(string(tail), "line 1") {
@@ -98,7 +106,9 @@ func TestCaptureWriterHandler(t *testing.T) {
 		received = append(received, data...)
 	})
 
-	cw.Write([]byte("hello"))
+	if _, err := cw.Write([]byte("hello")); err != nil {
+		t.Fatal(err)
+	}
 	if string(received) != "hello" {
 		t.Fatalf("handler received %q, want 'hello'", string(received))
 	}
@@ -118,17 +128,23 @@ func TestCaptureWriterReopen(t *testing.T) {
 	}
 	defer cw.Close()
 
-	cw.Write([]byte("before\n"))
+	if _, err := cw.Write([]byte("before\n")); err != nil {
+		t.Fatal(err)
+	}
 
 	// Simulate external rotation: rename the file.
-	os.Rename(logPath, logPath+".1")
+	if err := os.Rename(logPath, logPath+".1"); err != nil {
+		t.Fatal(err)
+	}
 
 	// Reopen.
 	if err := cw.Reopen(); err != nil {
 		t.Fatal(err)
 	}
 
-	cw.Write([]byte("after\n"))
+	if _, err := cw.Write([]byte("after\n")); err != nil {
+		t.Fatal(err)
+	}
 
 	data, err := os.ReadFile(logPath)
 	if err != nil {

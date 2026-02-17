@@ -33,7 +33,9 @@ func TestRotateFile(t *testing.T) {
 	logPath := filepath.Join(dir, "test.log")
 
 	// Write initial data.
-	os.WriteFile(logPath, []byte("data"), 0644)
+	if err := os.WriteFile(logPath, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	err := rotateFile(logPath, 3)
 	if err != nil {
@@ -57,7 +59,9 @@ func TestRotateFileMultiple(t *testing.T) {
 
 	// Simulate 3 rotations.
 	for i := 0; i < 3; i++ {
-		os.WriteFile(logPath, []byte("data"), 0644)
+		if err := os.WriteFile(logPath, []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
 		if err := rotateFile(logPath, 3); err != nil {
 			t.Fatal(err)
 		}
@@ -74,7 +78,9 @@ func TestRotateFileTruncateOnZeroBackups(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "test.log")
 
-	os.WriteFile(logPath, []byte("data"), 0644)
+	if err := os.WriteFile(logPath, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	err := rotateFile(logPath, 0)
 	if err != nil {
@@ -95,7 +101,9 @@ func TestRotateIfNeeded(t *testing.T) {
 	logPath := filepath.Join(dir, "test.log")
 
 	// Create a 100 byte file.
-	os.WriteFile(logPath, make([]byte, 100), 0644)
+	if err := os.WriteFile(logPath, make([]byte, 100), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Should not rotate (max = 200).
 	err := RotateIfNeeded(logPath, RotationConfig{Maxbytes: "200B", Backups: 3})

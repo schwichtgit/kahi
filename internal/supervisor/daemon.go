@@ -105,9 +105,9 @@ func Daemonize(logger *slog.Logger) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("cannot open /dev/null: %w", err)
 	}
-	syscall.Dup2(int(devNull.Fd()), int(os.Stdin.Fd()))
-	syscall.Dup2(int(devNull.Fd()), int(os.Stdout.Fd()))
-	syscall.Dup2(int(devNull.Fd()), int(os.Stderr.Fd()))
+	_ = syscall.Dup2(int(devNull.Fd()), int(os.Stdin.Fd()))
+	_ = syscall.Dup2(int(devNull.Fd()), int(os.Stdout.Fd()))
+	_ = syscall.Dup2(int(devNull.Fd()), int(os.Stderr.Fd()))
 	devNull.Close()
 
 	logger.Info("daemonized", "pid", os.Getpid())

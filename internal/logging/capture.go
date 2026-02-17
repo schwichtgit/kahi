@@ -141,12 +141,12 @@ func PipeToWriter(r io.ReadCloser, cw *CaptureWriter, containerStdout io.Writer)
 
 		// Write raw to capture writer (file + ring buffer + handlers).
 		lineBytes := []byte(line + "\n")
-		cw.Write(lineBytes)
+		_, _ = cw.Write(lineBytes)
 
 		// Write formatted JSON to container stdout if no file configured.
 		if containerStdout != nil && cw.config.Logfile == "" {
 			jsonLine := FormatJSONLine(cw.config.ProcessName, cw.config.Stream, line)
-			containerStdout.Write(jsonLine)
+			_, _ = containerStdout.Write(jsonLine)
 		}
 	}
 }

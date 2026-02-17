@@ -185,12 +185,12 @@ func (p *Process) startLocked() error {
 	}
 
 	// Start the watcher goroutine for startsecs transition.
-	go p.watchStart()
+	go p.watchStart(p.stopCh)
 
 	return nil
 }
 
-func (p *Process) watchStart() {
+func (p *Process) watchStart(stopCh <-chan struct{}) {
 	startsecs := time.Duration(p.config.Startsecs) * time.Second
 	if startsecs == 0 {
 		// Immediate transition to RUNNING.
@@ -210,7 +210,7 @@ func (p *Process) watchStart() {
 			p.logger.Error("state transition failed", "error", err)
 		}
 		p.publishStateUnlocked(p.sm.State())
-	case <-p.stopCh:
+	case <-stopCh:
 		return
 	}
 }
@@ -252,12 +252,12 @@ func (p *Process) stopLocked() error {
 	}
 
 	// Start the kill escalation timer.
-	go p.watchStop()
+	go p.watchStop(p.stopCh)
 
 	return nil
 }
 
-func (p *Process) watchStop() {
+func (p *Process) watchStop(stopCh <-chan struct{}) {
 	timeout := time.Duration(p.config.Stopwaitsecs) * time.Second
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -274,7 +274,7 @@ func (p *Process) watchStop() {
 			}
 		}
 		p.mu.Unlock()
-	case <-p.stopCh:
+	case <-stopCh:
 		// Process exited before timeout.
 	}
 }
@@ -343,7 +343,7 @@ func (p *Process) HandleExit(status *os.ProcessState) {
 		p.publishStateLocked(newState)
 
 		if newState == Backoff {
-			go p.retryAfterBackoff()
+			go p.retryAfterBackoff(p.stopCh)
 		}
 	case Running:
 		// Exited from running state.
@@ -402,7 +402,7 @@ func (p *Process) shouldRestart(exitCode int) bool {
 	}
 }
 
-func (p *Process) retryAfterBackoff() {
+func (p *Process) retryAfterBackoff(stopCh <-chan struct{}) {
 	delay := p.sm.BackoffDelay()
 	p.logger.Info("backing off", "delay", delay, "retries", p.sm.Retries())
 
@@ -426,7 +426,7 @@ func (p *Process) retryAfterBackoff() {
 			p.logger.Error("retry start failed", "error", err)
 		}
 		p.mu.Unlock()
-	case <-p.stopCh:
+	case <-stopCh:
 		return
 	}
 }
@@ -483,7 +483,7 @@ func (p *Process) restartAfterExit() {
 		go p.readPipe(spawned.StderrPipe(), "stderr", p.onStderr)
 	}
 
-	go p.watchStart()
+	go p.watchStart(p.stopCh)
 }
 
 func (p *Process) buildEnv() []string {

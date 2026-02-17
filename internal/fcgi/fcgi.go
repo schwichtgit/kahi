@@ -59,7 +59,10 @@ func (s *Socket) Open() (*os.File, error) {
 			return nil, fmt.Errorf("cannot create FastCGI socket: %s: %w", s.config.SocketPath, err)
 		}
 		if s.config.SocketMode != 0 {
-			os.Chmod(s.config.SocketPath, s.config.SocketMode)
+			if err := os.Chmod(s.config.SocketPath, s.config.SocketMode); err != nil {
+				ln.Close()
+				return nil, fmt.Errorf("cannot chmod FastCGI socket: %s: %w", s.config.SocketPath, err)
+			}
 		}
 	case ProtocolTCP:
 		ln, err = net.Listen("tcp", s.config.SocketPath)
@@ -73,20 +76,16 @@ func (s *Socket) Open() (*os.File, error) {
 	s.listener = ln
 
 	// Get the file descriptor for the listener.
-	var tcpLn *net.TCPListener
-	var unixLn *net.UnixListener
 	switch l := ln.(type) {
 	case *net.TCPListener:
-		tcpLn = l
-		f, err := tcpLn.File()
+		f, err := l.File()
 		if err != nil {
 			ln.Close()
 			return nil, fmt.Errorf("cannot get socket fd: %w", err)
 		}
 		s.fd = f
 	case *net.UnixListener:
-		unixLn = l
-		f, err := unixLn.File()
+		f, err := l.File()
 		if err != nil {
 			ln.Close()
 			return nil, fmt.Errorf("cannot get socket fd: %w", err)

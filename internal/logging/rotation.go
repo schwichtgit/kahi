@@ -43,11 +43,11 @@ func rotateFile(path string, backups int) error {
 	oldest := fmt.Sprintf("%s.%d", path, backups)
 	os.Remove(oldest)
 
-	// Shift existing backups.
+	// Shift existing backups (missing intermediates are expected).
 	for i := backups - 1; i >= 1; i-- {
 		src := fmt.Sprintf("%s.%d", path, i)
 		dst := fmt.Sprintf("%s.%d", path, i+1)
-		os.Rename(src, dst)
+		_ = os.Rename(src, dst)
 	}
 
 	// Rename current file to .1.

@@ -18,7 +18,9 @@ func TestResolveIncludesGlob(t *testing.T) {
 
 	// Create conf.d directory with files.
 	confDir := filepath.Join(dir, "conf.d")
-	os.MkdirAll(confDir, 0755)
+	if err := os.MkdirAll(confDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	webCfg := `[programs.web]
 command = "/usr/bin/web"
@@ -26,8 +28,12 @@ command = "/usr/bin/web"
 	apiCfg := `[programs.api]
 command = "/usr/bin/api"
 `
-	os.WriteFile(filepath.Join(confDir, "01-web.toml"), []byte(webCfg), 0644)
-	os.WriteFile(filepath.Join(confDir, "02-api.toml"), []byte(apiCfg), 0644)
+	if err := os.WriteFile(filepath.Join(confDir, "01-web.toml"), []byte(webCfg), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(confDir, "02-api.toml"), []byte(apiCfg), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	warnings, err := ResolveIncludes(mainCfg, dir)
 	if err != nil {
@@ -71,12 +77,16 @@ func TestResolveIncludesRelativePath(t *testing.T) {
 
 	// Create a relative include path.
 	confDir := filepath.Join(dir, "conf.d")
-	os.MkdirAll(confDir, 0755)
+	if err := os.MkdirAll(confDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	webCfg := `[programs.web]
 command = "/usr/bin/web"
 `
-	os.WriteFile(filepath.Join(confDir, "web.toml"), []byte(webCfg), 0644)
+	if err := os.WriteFile(filepath.Join(confDir, "web.toml"), []byte(webCfg), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg := &Config{
 		Include:  []string{"conf.d/*.toml"},
@@ -96,9 +106,13 @@ command = "/usr/bin/web"
 func TestResolveIncludesSyntaxError(t *testing.T) {
 	dir := t.TempDir()
 	confDir := filepath.Join(dir, "conf.d")
-	os.MkdirAll(confDir, 0755)
+	if err := os.MkdirAll(confDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
-	os.WriteFile(filepath.Join(confDir, "bad.toml"), []byte("[[invalid"), 0644)
+	if err := os.WriteFile(filepath.Join(confDir, "bad.toml"), []byte("[[invalid"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg := &Config{
 		Include:  []string{filepath.Join(dir, "conf.d/*.toml")},
@@ -114,13 +128,19 @@ func TestResolveIncludesSyntaxError(t *testing.T) {
 func TestResolveIncludesDuplicateProgram(t *testing.T) {
 	dir := t.TempDir()
 	confDir := filepath.Join(dir, "conf.d")
-	os.MkdirAll(confDir, 0755)
+	if err := os.MkdirAll(confDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	webCfg := `[programs.web]
 command = "/usr/bin/web"
 `
-	os.WriteFile(filepath.Join(confDir, "01.toml"), []byte(webCfg), 0644)
-	os.WriteFile(filepath.Join(confDir, "02.toml"), []byte(webCfg), 0644)
+	if err := os.WriteFile(filepath.Join(confDir, "01.toml"), []byte(webCfg), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(confDir, "02.toml"), []byte(webCfg), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg := &Config{
 		Include:  []string{filepath.Join(dir, "conf.d/*.toml")},
