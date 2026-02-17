@@ -108,18 +108,28 @@ func TestProcess_StatusWithOptions(t *testing.T) {
 }
 
 func TestProcess_Signal(t *testing.T) {
-	client, _ := startDaemon(t, processCtlConfig)
-	waitForState(t, client, "sleeper", "RUNNING", 5*time.Second)
+	dir := t.TempDir()
+	// Use a script that traps USR1 so it doesn't terminate
+	// (/bin/sleep exits on USR1 on macOS).
+	script := writeScript(t, dir, "trapper.sh", "trap 'echo got-usr1' USR1\nwhile true; do sleep 1; done")
 
-	info1, _ := getProcessInfo(client, "sleeper")
+	client, _ := startDaemon(t, `
+[programs.trapper]
+command = "`+script+`"
+autostart = true
+startsecs = 0
+`)
+	waitForState(t, client, "trapper", "RUNNING", 5*time.Second)
 
-	if err := client.Signal("sleeper", "USR1"); err != nil {
+	info1, _ := getProcessInfo(client, "trapper")
+
+	if err := client.Signal("trapper", "USR1"); err != nil {
 		t.Fatalf("signal USR1: %v", err)
 	}
 
 	// Process should still be running after USR1.
 	time.Sleep(500 * time.Millisecond)
-	info2, err := getProcessInfo(client, "sleeper")
+	info2, err := getProcessInfo(client, "trapper")
 	if err != nil {
 		t.Fatalf("get info after signal: %v", err)
 	}
@@ -244,7 +254,7 @@ stopwaitsecs = 5
 func TestProcess_StartRetries(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.flaky]
-command = "/bin/false"
+command = "`+binFalse+`"
 autostart = true
 startsecs = 1
 startretries = 2

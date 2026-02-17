@@ -20,6 +20,10 @@ import (
 // kahiBinary is the path to the built kahi binary, set by TestMain.
 var kahiBinary string
 
+// binFalse and binTrue are resolved at init to handle macOS (/usr/bin/) vs Linux (/bin/).
+var binFalse string
+var binTrue string
+
 func TestMain(m *testing.M) {
 	tmpDir, err := os.MkdirTemp("", "kahi-e2e-bin-*")
 	if err != nil {
@@ -33,6 +37,18 @@ func TestMain(m *testing.M) {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to build kahi binary: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Resolve portable paths for false/true (macOS: /usr/bin, Linux: /bin).
+	binFalse, err = exec.LookPath("false")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "required binary 'false' not found: %v\n", err)
+		os.Exit(1)
+	}
+	binTrue, err = exec.LookPath("true")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "required binary 'true' not found: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -67,7 +83,13 @@ type processInfo struct {
 func startDaemon(t *testing.T, configTOML string) (*ctl.Client, string) {
 	t.Helper()
 
-	dir := t.TempDir()
+	// Use a short temp dir to stay under macOS 104-char Unix socket path limit.
+	dir, err := os.MkdirTemp("", "k-")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+
 	socketPath := filepath.Join(dir, "kahi.sock")
 	configPath := filepath.Join(dir, "kahi.toml")
 

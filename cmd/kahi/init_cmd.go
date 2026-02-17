@@ -9,6 +9,7 @@ import (
 )
 
 var initOutput string
+var initStdout bool
 var initForce bool
 
 var initCmd = &cobra.Command{
@@ -17,27 +18,33 @@ var initCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		content := config.DefaultConfigTOML
 
-		if initOutput == "" {
+		if initStdout {
 			_, err := fmt.Fprint(cmd.OutOrStdout(), content)
 			return err
 		}
 
+		outPath := initOutput
+		if outPath == "" {
+			outPath = "kahi.toml"
+		}
+
 		if !initForce {
-			if _, err := os.Stat(initOutput); err == nil {
-				return fmt.Errorf("file %s already exists; use --force to overwrite", initOutput)
+			if _, err := os.Stat(outPath); err == nil {
+				return fmt.Errorf("file %s already exists; use --force to overwrite", outPath)
 			}
 		}
 
-		if err := os.WriteFile(initOutput, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(outPath, []byte(content), 0644); err != nil {
 			return fmt.Errorf("cannot write config: %w", err)
 		}
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", initOutput)
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", outPath)
 		return err
 	},
 }
 
 func init() {
-	initCmd.Flags().StringVarP(&initOutput, "output", "o", "", "write config to file instead of stdout")
+	initCmd.Flags().StringVarP(&initOutput, "output", "o", "", "write config to file (default: kahi.toml)")
+	initCmd.Flags().BoolVar(&initStdout, "stdout", false, "print config to stdout instead of writing a file")
 	initCmd.Flags().BoolVar(&initForce, "force", false, "overwrite existing file")
 	rootCmd.AddCommand(initCmd)
 }

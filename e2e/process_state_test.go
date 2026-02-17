@@ -10,7 +10,7 @@ import (
 func TestState_AutorestartTrue(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.shortlived]
-command = "/bin/false"
+command = "`+binFalse+`"
 autostart = true
 autorestart = "true"
 startsecs = 0
@@ -30,14 +30,21 @@ startretries = 3
 }
 
 func TestState_AutorestartFalse(t *testing.T) {
+	dir := t.TempDir()
+	// Script must survive past startsecs (defaults to 1) to reach RUNNING,
+	// then exit cleanly to test autorestart="false".
+	script := writeScript(t, dir, "oneshot.sh", "sleep 2\nexit 0")
+
 	client, _ := startDaemon(t, `
 [programs.oneshot]
-command = "/bin/true"
+command = "`+script+`"
 autostart = true
 autorestart = "false"
-startsecs = 0
 `)
-	// Process exits and should NOT restart.
+	// Wait for process to reach RUNNING (after startsecs=1 default).
+	waitForState(t, client, "oneshot", "RUNNING", 5*time.Second)
+
+	// Process exits after 2 seconds and should NOT restart.
 	waitForState(t, client, "oneshot", "EXITED", 10*time.Second)
 
 	// Wait a bit more and verify it stays EXITED.
@@ -51,7 +58,7 @@ startsecs = 0
 func TestState_AutorestartUnexpected(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.unexpected]
-command = "/bin/false"
+command = "`+binFalse+`"
 autostart = true
 autorestart = "unexpected"
 startsecs = 0
@@ -66,7 +73,7 @@ startretries = 3
 func TestState_BackoffToFatal(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.failing]
-command = "/bin/false"
+command = "`+binFalse+`"
 autostart = true
 startsecs = 1
 startretries = 2
@@ -78,16 +85,19 @@ startretries = 2
 
 func TestState_ExpectedExitCode(t *testing.T) {
 	dir := t.TempDir()
-	script := writeScript(t, dir, "exit2.sh", "exit 2")
+	// Script must survive past startsecs (defaults to 1) to reach RUNNING.
+	script := writeScript(t, dir, "exit2.sh", "sleep 2\nexit 2")
 
 	client, _ := startDaemon(t, `
 [programs.expected]
 command = "`+script+`"
 autostart = true
 autorestart = "unexpected"
-startsecs = 0
 exitcodes = [0, 2]
 `)
+	// Wait for process to reach RUNNING.
+	waitForState(t, client, "expected", "RUNNING", 5*time.Second)
+
 	// Exit code 2 is in exitcodes=[0,2], so it's expected. Should not restart.
 	waitForState(t, client, "expected", "EXITED", 10*time.Second)
 
@@ -101,7 +111,7 @@ exitcodes = [0, 2]
 func TestState_UnexpectedExitCode(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.unexp]
-command = "/bin/false"
+command = "`+binFalse+`"
 autostart = true
 autorestart = "unexpected"
 startsecs = 0
@@ -116,7 +126,7 @@ startretries = 2
 func TestState_KilledDuringBackoff(t *testing.T) {
 	client, _ := startDaemon(t, `
 [programs.backoff]
-command = "/bin/false"
+command = "`+binFalse+`"
 autostart = true
 startsecs = 1
 startretries = 10

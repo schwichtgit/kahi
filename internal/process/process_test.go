@@ -356,7 +356,7 @@ func TestAutorestartTrue(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Simulate exit with code 0 (expected).
-	p.HandleExit(nil)
+	p.HandleExit(0)
 	time.Sleep(50 * time.Millisecond)
 
 	mu.Lock()
@@ -385,7 +385,7 @@ func TestAutorestartFalse(t *testing.T) {
 	_ = p.Start()
 	time.Sleep(10 * time.Millisecond)
 
-	p.HandleExit(nil)
+	p.HandleExit(0)
 	time.Sleep(50 * time.Millisecond)
 
 	if spawnCount != 1 {
@@ -411,7 +411,7 @@ func TestAutorestartUnexpectedWithExpectedCode(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Exit with code 0 (expected) -- should NOT restart.
-	p.HandleExit(nil)
+	p.HandleExit(0)
 	time.Sleep(50 * time.Millisecond)
 
 	if spawnCount != 1 {
@@ -441,7 +441,7 @@ func TestAutorestartManualStopSuppressed(t *testing.T) {
 	// Manual stop.
 	_ = p.Stop()
 	time.Sleep(10 * time.Millisecond)
-	p.HandleExit(nil)
+	p.HandleExit(0)
 	time.Sleep(50 * time.Millisecond)
 
 	if spawnCount != 1 {
@@ -471,7 +471,7 @@ func TestAutorestartSuppressedDuringShutdown(t *testing.T) {
 	// Signal shutdown.
 	close(shutdownCh)
 
-	p.HandleExit(nil)
+	p.HandleExit(0)
 	time.Sleep(50 * time.Millisecond)
 
 	if spawnCount != 1 {

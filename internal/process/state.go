@@ -35,7 +35,7 @@ var validTransitions = map[State][]State{
 	Stopped:  {Starting},
 	Starting: {Running, Backoff, Stopping},
 	Running:  {Stopping, Exited},
-	Backoff:  {Starting, Fatal},
+	Backoff:  {Starting, Fatal, Stopped},
 	Stopping: {Stopped, Exited},
 	Exited:   {Starting},
 	Fatal:    {Starting},
