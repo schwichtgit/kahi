@@ -130,8 +130,8 @@ type MockProcess struct {
 	waitFn   func() (*os.ProcessState, error)
 	signalFn func(os.Signal) error
 	stdin    *mockPipeWriter
-	stdout   *mockPipeReader
-	stderr   *mockPipeReader
+	stdout   io.ReadCloser
+	stderr   io.ReadCloser
 }
 
 // NewMockProcess creates a MockProcess with the given PID.
