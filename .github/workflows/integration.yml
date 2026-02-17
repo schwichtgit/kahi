@@ -38,3 +38,19 @@ jobs:
         name: Integration tests
       - run: task test-e2e
         name: E2E tests
+      - name: Integration test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Integration Test Results
+          path: integration-results.xml
+          reporter: java-junit
+          fail-on-error: false
+      - name: E2E test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: E2E Test Results
+          path: e2e-results.xml
+          reporter: java-junit
+          fail-on-error: false

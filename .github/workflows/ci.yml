@@ -60,7 +60,7 @@ jobs:
         if: always()
         with:
           name: Unit Test Results
-          path: coverage-results.xml
+          path: unit-results.xml
           reporter: java-junit
           fail-on-error: false
 

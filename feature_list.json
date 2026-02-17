@@ -1756,15 +1756,17 @@
       "id": "test-output-formatting",
       "category": "testing",
       "title": "Test Output Formatting with gotestsum",
-      "description": "Replace raw go test output with gotestsum for live progress counters, human-readable formatting, and JUnit XML output for GitHub Actions test summaries.",
+      "description": "Replace raw go test output with gotestsum for live progress counters, human-readable formatting, and JUnit XML output. All test targets produce JUnit XML. CI renders 3 separate dorny/test-reporter checks (Unit, Integration, E2E) on PR checks tab.",
       "testing_steps": [
         "Verify gotestsum is listed in the setup task in Taskfile.yml",
-        "Run 'task test' and verify output uses testdox format showing test names with pass/fail status",
-        "Run 'task test-e2e' and verify output uses testdox format with live progress",
-        "Verify CI integration workflow produces JUnit XML via --junitfile flag",
-        "Verify GitHub Actions PR checks display test results summary from JUnit XML",
+        "Run 'task test' and verify output uses testdox format and produces unit-results.xml",
+        "Run 'task test-integration' and verify output uses testdox format and produces integration-results.xml",
+        "Run 'task test-e2e' and verify output uses testdox format and produces e2e-results.xml",
+        "Verify ci.yml has dorny/test-reporter step producing 'Unit Test Results' check from unit-results.xml",
+        "Verify integration.yml has 2 dorny/test-reporter steps producing 'Integration Test Results' and 'E2E Test Results' checks",
+        "Verify all 3 test reporter checks appear on PR checks tab",
         "Run a failing test locally and verify full error output is shown inline (not suppressed)",
-        "Verify gotestsum exit code matches go test exit code (non-zero on failure)"
+        "Verify JUnit XML files (*-results.xml) are listed in .gitignore"
       ],
       "passes": true,
       "dependencies": [

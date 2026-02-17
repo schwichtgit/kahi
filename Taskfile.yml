@@ -33,7 +33,7 @@ tasks:
   test:
     desc: Run unit tests with race detector
     cmds:
-      - gotestsum --format testdox -- -race -count=1 ./...
+      - gotestsum --format testdox --junitfile unit-results.xml -- -race -count=1 ./...
 
   lint:
     desc: Run golangci-lint
@@ -59,7 +59,7 @@ tasks:
   coverage:
     desc: Generate coverage report and fail if below 85%
     cmds:
-      - gotestsum --format testdox --junitfile coverage-results.xml -- -race -count=1 -coverprofile=coverage.out ./...
+      - gotestsum --format testdox --junitfile unit-results.xml -- -race -count=1 -coverprofile=coverage.out ./...
       - |
         total=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | tr -d '%')
         echo "Total coverage: ${total}%"
@@ -86,12 +86,12 @@ tasks:
   test-integration:
     desc: Run integration tests
     cmds:
-      - gotestsum --format testdox -- -race -count=1 -tags=integration ./...
+      - gotestsum --format testdox --junitfile integration-results.xml -- -race -count=1 -tags=integration ./...
 
   test-e2e:
     desc: Run end-to-end tests
     cmds:
-      - gotestsum --format testdox -- -race -count=1 -timeout=15m -tags=e2e ./...
+      - gotestsum --format testdox --junitfile e2e-results.xml -- -race -count=1 -timeout=15m -tags=e2e ./...
 
   setup:
     desc: Install development tools
