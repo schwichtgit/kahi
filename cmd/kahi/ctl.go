@@ -7,12 +7,14 @@ import (
 	"os/signal"
 	"strings"
 
+	"github.com/kahidev/kahi/internal/config"
 	"github.com/kahidev/kahi/internal/ctl"
 	"github.com/spf13/cobra"
 )
 
 var (
 	ctlSocket  string
+	ctlConfig  string
 	ctlAddr    string
 	ctlUser    string
 	ctlPass    string
@@ -32,9 +34,28 @@ func newCtlClient() *ctl.Client {
 	}
 	sock := ctlSocket
 	if sock == "" {
-		sock = "/var/run/kahi.sock"
+		sock = resolveSocketFromConfig()
 	}
 	return ctl.NewUnixClient(sock)
+}
+
+// resolveSocketFromConfig attempts to find the socket path from the config
+// file. Falls back to the default socket path if config cannot be loaded.
+func resolveSocketFromConfig() string {
+	const defaultSocket = "/var/run/kahi.sock"
+
+	cfgPath, err := config.Resolve(ctlConfig)
+	if err != nil {
+		return defaultSocket
+	}
+	cfg, _, err := config.Load(cfgPath)
+	if err != nil {
+		return defaultSocket
+	}
+	if cfg.Server.Unix.File != "" {
+		return cfg.Server.Unix.File
+	}
+	return defaultSocket
 }
 
 var ctlStartCmd = &cobra.Command{
@@ -367,7 +388,8 @@ var ctlAttachCmd = &cobra.Command{
 }
 
 func init() {
-	ctlCmd.PersistentFlags().StringVarP(&ctlSocket, "socket", "s", "", "Unix socket path")
+	ctlCmd.PersistentFlags().StringVarP(&ctlSocket, "socket", "s", "", "Unix socket path (overrides config)")
+	ctlCmd.PersistentFlags().StringVarP(&ctlConfig, "config", "c", "", "config file path (to resolve socket path)")
 	ctlCmd.PersistentFlags().StringVar(&ctlAddr, "addr", "", "TCP address (host:port)")
 	ctlCmd.PersistentFlags().StringVarP(&ctlUser, "username", "u", "", "HTTP Basic Auth username")
 	ctlCmd.PersistentFlags().StringVarP(&ctlPass, "password", "p", "", "HTTP Basic Auth password")

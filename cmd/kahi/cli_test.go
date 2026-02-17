@@ -49,12 +49,30 @@ func TestUnknownSubcommand(t *testing.T) {
 	}
 }
 
-func TestDaemonCommand(t *testing.T) {
+func TestDaemonCommandNoConfig(t *testing.T) {
+	// Without a config file, daemon should return an error.
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
-	rootCmd.SetArgs([]string{"daemon"})
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"daemon", "-c", "/nonexistent/kahi.toml"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent config")
+	}
+}
+
+func TestDaemonCommandHelp(t *testing.T) {
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetArgs([]string{"daemon", "--help"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, flag := range []string{"--config", "--pidfile", "--daemonize", "--user"} {
+		if !strings.Contains(out, flag) {
+			t.Errorf("daemon help missing flag %q", flag)
+		}
 	}
 }
 
