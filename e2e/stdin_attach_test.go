@@ -5,6 +5,7 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -63,29 +64,40 @@ startsecs = 0
 	waitForState(t, client, "interactive", "RUNNING", 5*time.Second)
 	time.Sleep(500 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var stdout struct {
 		mu  sync.Mutex
 		buf bytes.Buffer
 	}
-	stdin := strings.NewReader("test-input\n")
+
+	// Use a pipe so we control when stdin data is written.
+	// This avoids a race where the StringReader is consumed before
+	// TailFollow establishes the SSE connection.
+	pr, pw := io.Pipe()
 
 	go func() {
-		_ = client.Attach(ctx, "interactive", stdin, &writerFunc{func(p []byte) (int, error) {
+		_ = client.Attach(ctx, "interactive", pr, &writerFunc{func(p []byte) (int, error) {
 			stdout.mu.Lock()
 			defer stdout.mu.Unlock()
 			return stdout.buf.Write(p)
 		}})
 	}()
 
-	deadline := time.After(5 * time.Second)
+	// Give TailFollow time to establish the SSE connection.
+	time.Sleep(1 * time.Second)
+
+	// Now write stdin data through the pipe.
+	_, _ = pw.Write([]byte("test-input\n"))
+
+	deadline := time.After(8 * time.Second)
 	for {
 		stdout.mu.Lock()
 		got := stdout.buf.String()
 		stdout.mu.Unlock()
 		if strings.Contains(got, "reply:test-input") {
+			pw.Close()
 			return
 		}
 		select {

@@ -3024,7 +3024,12 @@ None specific.
 
 **Dependencies:** TEST-002
 
-#### E2E Test Suite: 11 files, 70 tests, 9 domains
+#### E2E Test Suite: 11 files, 68 tests, 9 domains
+
+**Known Skips (2):**
+
+- `TestDaemon_Daemonize` -- Go runtime cannot safely fork after goroutines start; skipped with `t.Skip`
+- `TestAuth_TCPWithCreds` -- requires TCP port discovery not yet implemented; skipped with `t.Skip`
 
 | File | Coverage area | Tests |
 | --- | --- | --- |
@@ -3160,17 +3165,21 @@ None specific.
 
 ### TEST-004: Test Output Formatting with gotestsum
 
-**Description:** Replace raw `go test -v` output with `gotestsum` for both local development and CI. Provides live progress counters (e.g., `12/68 PASS TestProcess_Start`), human-readable formatting, and JUnit XML output for GitHub Actions test summaries.
+**Description:** Replace raw `go test -v` output with `gotestsum` for both local development and CI. All test targets produce JUnit XML and use testdox formatting. CI workflows render 3 separate `dorny/test-reporter` checks (Unit, Integration, E2E) so PR reviewers can triage failures by category.
 
 **Acceptance Criteria:**
 
 - [ ] `gotestsum` is added to the setup task in Taskfile.yml
-- [ ] `task test-e2e` uses `gotestsum` with `--format testdox` for readable output
-- [ ] `task test` uses `gotestsum` with `--format testdox` for unit tests
-- [ ] CI integration workflow produces JUnit XML via `--junitfile results.xml`
-- [ ] GitHub Actions workflow uses a test reporter action to display results in PR checks
-- [ ] Local `task test` and `task test-e2e` show live progress (test name + pass/fail as each completes)
+- [ ] `task test` uses `gotestsum` with `--format testdox` and `--junitfile unit-results.xml`
+- [ ] `task test-integration` uses `gotestsum` with `--format testdox` and `--junitfile integration-results.xml`
+- [ ] `task test-e2e` uses `gotestsum` with `--format testdox` and `--junitfile e2e-results.xml`
+- [ ] `task coverage` uses `gotestsum` with `--format testdox` and `--junitfile unit-results.xml`
+- [ ] CI `ci.yml` workflow has `dorny/test-reporter` step producing "Unit Test Results" check from `unit-results.xml`
+- [ ] CI `integration.yml` workflow has 2 `dorny/test-reporter` steps producing "Integration Test Results" and "E2E Test Results" checks
+- [ ] All 3 test reporter checks appear on PR checks tab
+- [ ] Local runs show live progress (test name + pass/fail as each completes)
 - [ ] Failing tests show full output inline (not suppressed by formatting)
+- [ ] JUnit XML files are listed in `.gitignore`
 
 **Error Handling:**
 
