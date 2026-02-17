@@ -57,7 +57,7 @@ jobs:
         name: Build
       - name: Test report
         uses: dorny/test-reporter@v1
-        if: always() && steps.filter.outputs.golang == 'true'
+        if: always()
         with:
           name: Unit Test Results
           path: coverage-results.xml
