@@ -109,3 +109,89 @@ func TestResolveUserInvalid(t *testing.T) {
 		t.Fatal("expected error for invalid uid")
 	}
 }
+
+func TestResolveUserInvalidGid(t *testing.T) {
+	_, _, err := resolveUser("1000:abc")
+	if err == nil {
+		t.Fatal("expected error for invalid gid")
+	}
+}
+
+func TestValidateUnprivilegedAsRoot(t *testing.T) {
+	original := getuid
+	getuid = func() int { return 0 }
+	defer func() { getuid = original }()
+
+	if err := ValidateUnprivileged(testLogger()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateSocketPermissionsNotDirectory(t *testing.T) {
+	dir := t.TempDir()
+	// Create a regular file where the parent "directory" should be.
+	fakedir := filepath.Join(dir, "notadir")
+	if err := os.WriteFile(fakedir, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := ValidateSocketPermissions(fakedir + "/kahi.sock")
+	if err == nil {
+		t.Fatal("expected error for non-directory parent")
+	}
+	if !strings.Contains(err.Error(), "not a directory") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateSocketPermissionsNoWritePermission(t *testing.T) {
+	dir := t.TempDir()
+	restricted := filepath.Join(dir, "noperm")
+	if err := os.Mkdir(restricted, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(restricted, 0755) })
+
+	err := ValidateSocketPermissions(restricted + "/kahi.sock")
+	if err == nil {
+		t.Fatal("expected permission denied error")
+	}
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDropPrivilegesEmptyUser(t *testing.T) {
+	if err := DropPrivileges("", testLogger()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDropPrivilegesInvalidUser(t *testing.T) {
+	err := DropPrivileges("notanumber", testLogger())
+	if err == nil {
+		t.Fatal("expected error for invalid user")
+	}
+}
+
+func TestSplitUserGroupVariants(t *testing.T) {
+	tests := []struct {
+		input string
+		want  []string
+	}{
+		{"1000", []string{"1000"}},
+		{"1000:1000", []string{"1000", "1000"}},
+		{":1000", []string{"", "1000"}},
+	}
+	for _, tt := range tests {
+		got := splitUserGroup(tt.input)
+		if len(got) != len(tt.want) {
+			t.Fatalf("splitUserGroup(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+		for i := range got {
+			if got[i] != tt.want[i] {
+				t.Fatalf("splitUserGroup(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
+			}
+		}
+	}
+}

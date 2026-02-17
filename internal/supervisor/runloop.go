@@ -243,7 +243,8 @@ func (s *Supervisor) handleSigchld() {
 }
 
 // reapChild wraps waitpid with WNOHANG. Returns 0 when no more children.
-func reapChild() (int, int, error) {
+// It is a var so tests can override the reaping behavior.
+var reapChild = func() (int, int, error) {
 	var ws syscall.WaitStatus
 	pid, err := syscall.Wait4(-1, &ws, syscall.WNOHANG, nil)
 	if err != nil {
